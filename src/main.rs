@@ -83,10 +83,9 @@ fn main() {
     {
         let m = Arc::clone(&m);
         threads.push(thread::spawn(move || {
-            gen(0, IMGX, 0, IMGY, m);
+            gen(0, IMGX / 2, 0, IMGY / 2, m);
         }));
     }
-    /*
     {
         let m = Arc::clone(&m);
         threads.push(thread::spawn(move || {
@@ -104,7 +103,7 @@ fn main() {
         threads.push(thread::spawn(move || {
             gen(IMGX / 2, IMGX, IMGY / 2, IMGY, m);
         }));
-    }*/
+    }
 
     for thread in threads {
         thread.join().unwrap();
@@ -129,11 +128,11 @@ mod tests {
     }
     #[test]
     fn iterative() {
-        assert_eq!(mandeli(1.0, 0.0, 1.0, 100), 2);
+        assert_eq!(mandeli(1.0, 0.0, 100), 2);
     }
     #[test]
     fn iterative_zero() {
-        assert_eq!(mandeli(0.0, 0.0, 1.0, 100), 3);
+        assert_eq!(mandeli(0.0, 0.0, 100), 3);
     }
     #[test]
     fn stays_small() {
