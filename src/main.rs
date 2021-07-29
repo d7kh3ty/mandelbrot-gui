@@ -1,7 +1,7 @@
 extern crate image;
 use image::{ImageBuffer, Rgb};
 
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::sync::mpsc;
 
 use ansi_term::Colour;
