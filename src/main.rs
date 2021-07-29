@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use image::{ImageBuffer, Rgb};
 
+/*
 fn julia(a: f32, b: f32, ca: f32, cb: f32, i: i32, max: i32) -> i32 {
     //println!("a:{}, b:{}, i:{}, max:{}", a, b, i, max);
     //let f: f32 = a.powf(2.0) + b.powf(2.0);
@@ -16,6 +17,7 @@ fn julia(a: f32, b: f32, ca: f32, cb: f32, i: i32, max: i32) -> i32 {
     }
     julia(a2 - b2 + ca, 2.0 * a * b + cb, ca, cb, i + 1, max)
 }
+*/
 
 fn mandel(dx: f32, dy: f32, max: i32) -> i32 {
     let mut a: f32 = 0.0;
@@ -52,20 +54,20 @@ static SCALE: f32 = 100.0;
 fn gen(x1: u32, x2: u32, y1: u32, y2: u32, m: Arc<Mutex<ImageBuffer<Rgb<u8>, Vec<u8>>>>) {
     // generate the fractal
     for x in x1..x2 {
+        let mut imgbuf = m.lock().unwrap();
+        print!("{}%     \r", (x as f32 / x2 as f32) * 100.0);
         for y in y1..y2 {
-            let mut imgbuf = m.lock().unwrap();
             //let dx: f32 = (x as f32 / IMGX as f32) as f32;
             //let dy: f32 = (y as f32 / IMGY as f32) as f32;
             let dx: f32 = (x as f32 - (IMGX / 2) as f32) / (SCALE * IMGX as f32) + POSX;
             let dy: f32 = (y as f32 - (IMGY / 2) as f32) / (SCALE * IMGY as f32) + POSY;
-            //let i = julia(-1.1086391524242, 0.25949259547294, dx, dy, 1, ITERATIONS) as u8;
             let i = mandel(dx, dy, ITERATIONS) as u8;
+            //let i = julia(-1.1086391524242, 0.25949259547294, dx, dy, 1, ITERATIONS) as u8;
 
             //let mut f: u8 = 0;
 
             //f = ((i % 100) * 255) as u8;
             //println!("{}, {}: \n i == {}, f == {}", dx, dy, i, f);
-            print!("{}%     \r", (x as f32 / x2 as f32) * 100.0);
 
             let pixel = imgbuf.get_pixel_mut(x, y);
             //let image::Rgb(data) = *pixel;
@@ -75,6 +77,7 @@ fn gen(x1: u32, x2: u32, y1: u32, y2: u32, m: Arc<Mutex<ImageBuffer<Rgb<u8>, Vec
                 *pixel = image::Rgb([i, 0, i]);
             }
         }
+        imgbuf.save("assets/temp.png");
     }
 }
 
@@ -88,10 +91,10 @@ fn main() {
     {
         let m = Arc::clone(&m);
         threads.push(thread::spawn(move || {
-            gen(0, IMGX, 0, IMGY, m);
+            gen(0, IMGX / 2, 0, IMGY / 2, m);
         }));
     }
-    /*
+
     {
         let m = Arc::clone(&m);
         threads.push(thread::spawn(move || {
@@ -109,7 +112,7 @@ fn main() {
         threads.push(thread::spawn(move || {
             gen(IMGX / 2, IMGX, IMGY / 2, IMGY, m);
         }));
-    }*/
+    }
 
     for thread in threads {
         thread.join().unwrap();
