@@ -6,6 +6,36 @@ use std::sync::mpsc;
 
 use ansi_term::Colour;
 
+use rocket::fs::{FileServer, relative};
+
+// If we wanted or needed to serve files manually, we'd use `NamedFile`. Always
+// prefer to use `FileServer`!
+mod manual {
+    use std::path::{PathBuf, Path};
+    use rocket::fs::NamedFile;
+
+    #[rocket::get("/second/<path..>")]
+    pub async fn second(path: PathBuf) -> Option<NamedFile> {
+        let mut path = Path::new(super::relative!("static")).join(path);
+        if path.is_dir() {
+            path.push("index.html");
+        }
+
+        NamedFile::open(path).await.ok()
+    }
+}
+
+#[rocket::launch]
+fn rocket() -> _ {
+    let imgbuf = spawn(8);
+    println!("done!! saving image");
+    imgbuf.save("static/assets/fractal.png").unwrap();
+
+    rocket::build()
+        .mount("/", rocket::routes![manual::second])
+        .mount("/", FileServer::from(relative!("static")))
+}
+
 /*
 fn julia(a: f32, b: f32, ca: f32, cb: f32, i: i32, max: i32) -> i32 {
     //println!("a:{}, b:{}, i:{}, max:{}", a, b, i, max);
@@ -48,7 +78,7 @@ static IMGY: u32 = 2000;
 static POSX: f32 = -0.70;
 static POSY: f32 = 0.26109119081845;
 
-static ITERATIONS: i32 = 10000;
+static ITERATIONS: i32 = 2000;
 
 static SCALE: f32 = 100.0;
 
@@ -81,7 +111,7 @@ fn gen(x1: u32, x2: u32, y1: u32, y2: u32) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
         }
     }
     println!("{}, {}, {}, {}", x1, x2, y1, y2);
-    println!("{}", Colour::Green.paint("done!  "));
+    //println!("{}", Colour::Green.paint("done!  "));
     imgbuf
 }
 
@@ -131,10 +161,12 @@ fn spawn(n: u32) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     imgbuf
 }
 
+/*
 fn main() {
     //let mut threads = vec![];
 
-    let imgbuf = spawn(64);
+    let imgbuf = spawn(4);
     println!("done!! saving image");
     imgbuf.save("assets/fractal.png").unwrap();
 }
+*/

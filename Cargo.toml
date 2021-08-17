@@ -10,6 +10,7 @@ edition = "2018"
 image = "0.23.14"
 ansi_term = "0.12.1"
 #num-complex = "0.4.0"
+rocket = "0.5.0-rc.1"
 
 [toolchain]
 channel = "nightly"
