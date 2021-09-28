@@ -1,7 +1,4 @@
-use mndlrs::cli::{fun::spawn,
-                  structs::{ImageSize,
-                            Parameters,
-                            Position}};
+use mndlrs::mandelbrot::*;
 use structopt::StructOpt;
 /// A mandelbrot image generator, written in Rust!!
 #[derive(StructOpt, Debug)]
