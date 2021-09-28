@@ -1,5 +1,6 @@
-use mndlrs::mandelbrot::*;
+use daedal::mandelbrot::*;
 use structopt::StructOpt;
+
 /// A mandelbrot image generator, written in Rust!!
 #[derive(StructOpt, Debug)]
 #[structopt(name = "mndlrs")]
@@ -21,7 +22,7 @@ struct Opt {
     position: String,
 
     /// zoom
-    #[structopt(short, long, default_value = "7")]
+    #[structopt(short, long, default_value = "1")]
     scale: f32,
 
     /// the number of iterations to be ran
