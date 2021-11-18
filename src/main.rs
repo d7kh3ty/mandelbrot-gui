@@ -23,14 +23,14 @@ struct Opt {
 
     /// zoom
     #[structopt(short, long, default_value = "-0.3")]
-    scale: f32,
+    scale: f64,
 
     /// the number of iterations to be ran
     #[structopt(short, long, default_value = "200")]
     iterations: u32,
 }
 
-fn new_params(size: String, position: String, scale: f32, iterations: u32) -> Parameters {
+fn new_params(size: String, position: String, scale: f64, iterations: u32) -> Parameters {
     let split = size.split('x');
     let s: Vec<&str> = split.collect();
 
@@ -47,11 +47,11 @@ fn new_params(size: String, position: String, scale: f32, iterations: u32) -> Pa
     let s: Vec<&str> = split.collect();
 
     println!("{},{}", s[0], s[1]);
-    let px = match s[0].parse::<f32>() {
+    let px = match s[0].parse::<f64>() {
         Ok(x) => x,
         Err(e) => panic!("invalid argument to position: {}", e),
     };
-    let py = match s[1].parse::<f32>() {
+    let py = match s[1].parse::<f64>() {
         Ok(y) => y,
         Err(e) => panic!("invalid argument to position: {}", e),
     };
@@ -88,13 +88,8 @@ pub fn main() {
     // };
     let mut imgbuf = image::RgbImage::new(1024, 1024);
     let (tx, rx) = mpsc::channel();
-    let sender = tx.clone();
-    let params = parameters.clone();
-    let c = opt.cores;
-    thread::spawn(move || {
-        spawn(sender, c, &params);
-    });
-    let mut reciever = rx.try_iter();
+
+    let mut please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
@@ -112,6 +107,10 @@ pub fn main() {
     use std::time::SystemTime;
     canvas.clear();
     'running: loop {
+        let size = canvas.output_size().unwrap();
+        parameters.size.x = size.0;
+        parameters.size.y = size.1;
+
         let time = SystemTime::now();
         //i = (i + 1) % 255;
 
@@ -142,20 +141,25 @@ pub fn main() {
         //    Err(_) => image::RgbImage::new(1024, 1024),
         //};
 
-        if let Ok(img) = rx.try_recv() {
-            println!("img section received!");
-            for (x, y, p) in img.enumerate_pixels() {
-                let pixel = imgbuf.get_pixel_mut(x, y);
-                let image::Rgb(data) = *p;
-                if data[0] > 0 || data[1] > 0 || data[2] > 0 {
-                    //*pixel = image::Rgb([255, 0, 255]);
-                    *pixel = *p;
-                    canvas
-                        .pixel(x as i16, y as i16, Color::RGB(data[0], data[1], data[2]))
-                        .unwrap();
+        while true {
+            if let Ok(img) = rx.try_recv() {
+                println!("img section received!");
+                for (x, y, p) in img.enumerate_pixels() {
+                    let pixel = imgbuf.get_pixel_mut(x, y);
+                    let image::Rgb(data) = *p;
+                    if data[0] > 0 || data[1] > 0 || data[2] > 0 {
+                        //*pixel = image::Rgb([255, 0, 255]);
+                        *pixel = *p;
+                        canvas
+                            .pixel(x as i16, y as i16, Color::RGB(data[0], data[1], data[2]))
+                            .unwrap();
+                    }
                 }
+                //println!("img section processed!");
+            } else {
+                println!("none recieved");
+                break
             }
-            //println!("img section processed!");
         }
 
         for event in event_pump.poll_iter() {
@@ -166,24 +170,99 @@ pub fn main() {
                     ..
                 } => break 'running,
                 Event::KeyDown {
+                    keycode: Some(Keycode::Up),
+                    ..
+                } => {
+                    let _ = please_stop.send(());
+                    let mut z = 0.1 / (10.0_f64).powf(parameters.scale);
+                    if z < 0.0 {
+                        z = -z;
+                    }
+                    parameters.position.y -= z;
+                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Down),
+                    ..
+                } => {
+                    let _ = please_stop.send(());
+                    //canvas.clear();
+                    //imgbuf = image::RgbImage::new(1024, 1024);
+                    let mut z = 0.1 / (10.0_f64).powf(parameters.scale);
+                    if z > 0.0 {
+                        z = -z;
+                    }
+                    parameters.position.y -= z;
+                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+                }
+                Event::KeyDown {
                     keycode: Some(Keycode::Left),
                     ..
                 } => {
-                    canvas.clear();
-                    parameters.position.x -= 0.1 * parameters.scale;
-                    let sender = tx.clone();
-                    let params = parameters.clone();
-                    let c = opt.cores;
-                    thread::spawn(move || {
-                        spawn(sender, c, &params);
-                    });
+                    let _ = please_stop.send(());
+                    let mut z = 0.1 / (10.0_f64).powf(parameters.scale);
+                    if z < 0.0 {
+                        z = -z;
+                    }
+                    parameters.position.x -= z;
+                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Right),
+                    ..
+                } => {
+                    let _ = please_stop.send(());
+                    let mut z = 0.1 / (10.0_f64).powf(parameters.scale);
+                    if z > 0.0 {
+                        z = -z;
+                    }
+                    parameters.position.x -= z;
+                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Equals),
+                    ..
+                } => {
+                    let _ = please_stop.send(());
+                    parameters.scale += 0.1;
+                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::Minus),
+                    ..
+                } => {
+                    let _ = please_stop.send(());
+                    parameters.scale -= 0.1;
+                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::P),
+                    ..
+                } => {
+                    let _ = please_stop.send(());
+                    parameters.iterations += 1000;
+                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::N),
+                    ..
+                } => {
+                    let _ = please_stop.send(());
+                    parameters.iterations -= 1000;
+                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::C),
+                    ..
+                } => {
+                    let _ = please_stop.send(());
+                    //please_stop.send(()).unwrap();
                 }
                 _ => {}
             }
         }
-        // The rest of the game loop goes here...
 
-        println!("{}", time.elapsed().unwrap().as_millis());
+        //println!("{:?}", size);
         canvas
             .string(
                 10,
