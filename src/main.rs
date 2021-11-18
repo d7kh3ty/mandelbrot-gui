@@ -168,6 +168,10 @@ pub fn main() {
                 | Event::KeyDown {
                     keycode: Some(Keycode::Escape),
                     ..
+                }
+                | Event::KeyDown {
+                    keycode: Some(Keycode::Q),
+                    ..
                 } => break 'running,
                 Event::KeyDown {
                     keycode: Some(Keycode::Up),
@@ -256,7 +260,21 @@ pub fn main() {
                     ..
                 } => {
                     let _ = please_stop.send(());
-                    //please_stop.send(()).unwrap();
+                }
+                Event::KeyDown {
+                    keycode: Some(Keycode::S),
+                    ..
+                } => {
+                    let _ = please_stop.send(());
+                    let (tx, rx) = mpsc::channel();
+                    parameters.size.x = 4086;
+                    parameters.size.y = 4086;
+                    create_new_thread(tx, 64, parameters);
+                    match rx.recv() {
+                        Ok(imgbuf) => imgbuf.save("fractal.png").unwrap(),
+                        Err(e) => eprintln!("could not save image :( {e}"),
+                    }
+                    return
                 }
                 _ => {}
             }
