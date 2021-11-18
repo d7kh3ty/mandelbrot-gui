@@ -68,6 +68,5 @@ fn main() {
     let opt = Opt::from_args();
     let parameters = new_params(opt.size, opt.position, opt.scale, opt.iterations);
     let imgbuf = spawn(opt.cores, parameters);
-    println!("done!! saving image to: {}", opt.output);
-    imgbuf.save(opt.output).unwrap();
+    println!("done!! image to: {}", opt.output);
 }

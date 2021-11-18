@@ -54,7 +54,7 @@ fn gen(
     let imgy = parameters.size.x;
     let posx = parameters.position.x;
     let posy = parameters.position.x;
-    let scale = parameters.scale;
+    let scale = (10.0_f64).powf(parameters.scale.into()) as f32;
     let iterations = parameters.iterations;
     // generate the fractal
     let mut imgbuf = image::ImageBuffer::new(imgx, imgy);
@@ -77,14 +77,13 @@ fn gen(
             let pixel = imgbuf.get_pixel_mut(x, y);
             //let image::Rgb(data) = *pixel;
             if i == iterations as u8 {
-                *pixel = image::Rgb([0, 0, 0]);
+                *pixel = image::Rgb([1, 1, 1]);
             } else {
                 *pixel = image::Rgb([i, 0, i]);
             }
         }
     }
     println!("{}, {}, {}, {}", x1, x2, y1, y2);
-    //println!("{}", Colour::Green.paint("done!  "));
     imgbuf
 }
 
@@ -104,36 +103,96 @@ pub fn spawn(n: u32, parameters: Parameters) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     let sx = imgx / xm;
     let sy = imgy / ym;
     let mut threads = vec![];
+    let mut count = 0;
     for x in 0..xm {
         for y in 0..ym {
             //println!("{}, {}, {}, {}", x * sx, x * sx + sx, y * sy, y * sy + sy);
             //gen(x * imgx / xm, imgx / xm, 0, imgy / 2);
             {
-                let t = tx.clone();
+                count += 1;
+                let s = tx.clone();
                 let p = parameters.clone();
                 threads.push(thread::spawn(move || {
                     let f = gen(x * sx, x * sx + sx, y * sy, y * sy + sy, p);
-                    t.send(f).unwrap();
+                    println!("thread {count} done");
+                    s.send(f).unwrap();
                 }));
             }
         }
     }
-    for thread in threads {
-        thread.join().unwrap();
-    }
+    use image::io::Reader as ImageReader;
+    let mut imgbuf = match ImageReader::open("fractal.png") {
+        Ok(img) => match img.decode() {
+            Ok(i) => i.to_rgb8(),
+            Err(_) => image::RgbImage::new(imgx, imgy),
+        },
+        Err(_) => image::RgbImage::new(imgx, imgy),
+    };
 
-    let mut imgbuf = image::ImageBuffer::new(imgx, imgy);
+    for img in rx {
+        //println!("recieved! {recv:?}");
 
-    for mut img in rx.iter().take(n as usize) {
-        for (x, y, p) in img.enumerate_pixels_mut() {
+        for (x, y, p) in img.enumerate_pixels() {
             let pixel = imgbuf.get_pixel_mut(x, y);
             let image::Rgb(data) = *p;
             if data[0] > 0 || data[1] > 0 || data[2] > 0 {
+                //*pixel = image::Rgb([255, 0, 255]);
                 *pixel = *p;
             }
         }
-        //imgbuf.save("assets/fractal.png").unwrap();
+        imgbuf.save("fractal.png").unwrap();
+
+        count -= 1;
+        if count <= 0 {
+            return imgbuf
+        }
     }
+
+    //let mut image = image::ImageBuffer::new(imgx, imgy);
+    //for (x, y, p) in imgbuf.enumerate_pixels_mut() {
+    //    let pixel = image.get_pixel_mut(x, y);
+    //    let image::Rgb(data) = *p;
+    //    if data[0] > 0 || data[1] > 0 || data[2] > 0 {
+    //        *pixel = *p;
+    //    }
+    //    *pixel = image::Rgb([0, 0, 0]);
+    //}
+    //imgbuf.save("fractal.png").unwrap();
+
+    // for (_, _, p) in imgbuf.enumerate_pixels_mut() {
+    //     *p = image::Rgb([255, 255, 255]);
+    // }
+    // for i in 0..imgx {
+    //     for j in 0..i {
+    //         let pixel = imgbuf.get_pixel_mut(j, i);
+    //         *pixel = image::Rgb([0, 0, 255]);
+    //     }
+    // }
+    // imgbuf.save("fractal.png").unwrap();
+    // use std::time;
+    // thread::sleep(time::Duration::from_millis(4000));
+
+    // for thread in threads {
+    //     thread.join().unwrap();
+    //     println!("thread received");
+    //     let mut img = rx.recv().unwrap();
+    //     for (x, y, p) in img.enumerate_pixels_mut() {
+    //         let pixel = imgbuf.get_pixel_mut(x, y);
+    //         let image::Rgb(data) = *p;
+    //         if data[0] > 0 || data[1] > 0 || data[2] > 0 {
+    //             *pixel = *p;
+    //         }
+    //         *pixel = image::Rgb([0, 0, 0]);
+    //     }
+    //     imgbuf.save("fractal.png").unwrap();
+    //     //imgbuf.save("fractal.png").unwrap();
+    //     for i in 0..imgx {
+    //         for j in 0..i {
+    //             let pixel = imgbuf.get_pixel_mut(j, i);
+    //             *pixel = image::Rgb([255, 255, 0]);
+    //         }
+    //     }
+    // }
     imgbuf
 }
 /*
