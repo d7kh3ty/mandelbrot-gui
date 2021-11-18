@@ -114,6 +114,7 @@ pub fn main() {
         let time = SystemTime::now();
         //i = (i + 1) % 255;
 
+        canvas.clear();
         //canvas.fill_rect(Rect::new(10, 50, 780, 580)).unwrap();
         // for i in 0..600 {
         //     for j in 0..i {
@@ -137,9 +138,9 @@ pub fn main() {
                 if data[0] > 0 || data[1] > 0 || data[2] > 0 {
                     //*pixel = image::Rgb([255, 0, 255]);
                     *pixel = *p;
-                    canvas
-                        .pixel(x as i16, y as i16, Color::RGB(data[0], data[1], data[2]))
-                        .unwrap();
+                    // canvas
+                    //     .pixel(x as i16, y as i16, Color::RGB(data[0], data[1], data[2]))
+                    //     .unwrap();
                 }
             }
             //println!("img section processed!");
