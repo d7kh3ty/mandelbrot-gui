@@ -53,7 +53,7 @@ fn gen(
     let imgx = parameters.size.x;
     let imgy = parameters.size.x;
     let posx = parameters.position.x;
-    let posy = parameters.position.x;
+    let posy = parameters.position.y;
     let scale = (10.0_f64).powf(parameters.scale.into()) as f32;
     let iterations = parameters.iterations;
     // generate the fractal
@@ -87,21 +87,32 @@ fn gen(
     imgbuf
 }
 
-pub fn spawn(n: u32, parameters: Parameters) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
+pub fn spawn(tx: mpsc::Sender<ImageBuffer<Rgb<u8>, Vec<u8>>>, n: u32, parameters: &Parameters) {
     let imgx = parameters.size.x;
     let imgy = parameters.size.x;
-    let (tx, rx) = mpsc::channel();
     let mut xm: u32 = 0;
     let mut ym: u32 = 0;
-    for i in 1..n / 2 {
+    let mut min = 100;
+    let mut sx = imgx;
+    let mut sy = imgy;
+    for i in 1..n {
+        if n == 1 {
+            break
+        }
+        println!("{i}/{n}");
+        println!("{n}%{i} = {}", n % i);
         if n % i == 0 {
-            xm = i;
-            ym = n / i;
+            println!("{ym}x{xm}, {}", ((n / i) as i32) - 4);
+            if ((n / i) as i32) - 4 < min {
+                xm = i;
+                ym = n / i;
+                min = ((n / i) as i32) - 4;
+            }
             println!("{}, {}", xm, ym);
         }
+        sx = imgx / xm;
+        sy = imgy / ym;
     }
-    let sx = imgx / xm;
-    let sy = imgy / ym;
     let mut threads = vec![];
     let mut count = 0;
     for x in 0..xm {
@@ -120,33 +131,26 @@ pub fn spawn(n: u32, parameters: Parameters) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
             }
         }
     }
-    use image::io::Reader as ImageReader;
-    let mut imgbuf = match ImageReader::open("fractal.png") {
-        Ok(img) => match img.decode() {
-            Ok(i) => i.to_rgb8(),
-            Err(_) => image::RgbImage::new(imgx, imgy),
-        },
-        Err(_) => image::RgbImage::new(imgx, imgy),
-    };
+    //use image::io::Reader as ImageReader;
 
-    for img in rx {
-        //println!("recieved! {recv:?}");
+    // for img in rx {
+    //     //println!("recieved! {recv:?}");
 
-        for (x, y, p) in img.enumerate_pixels() {
-            let pixel = imgbuf.get_pixel_mut(x, y);
-            let image::Rgb(data) = *p;
-            if data[0] > 0 || data[1] > 0 || data[2] > 0 {
-                //*pixel = image::Rgb([255, 0, 255]);
-                *pixel = *p;
-            }
-        }
-        //imgbuf.save("fractal.png").unwrap();
+    //     for (x, y, p) in img.enumerate_pixels() {
+    //         let pixel = (*imgbuf).get_pixel_mut(x, y);
+    //         let image::Rgb(data) = *p;
+    //         if data[0] > 0 || data[1] > 0 || data[2] > 0 {
+    //             //*pixel = image::Rgb([255, 0, 255]);
+    //             *pixel = *p;
+    //         }
+    //     }
+    //     //imgbuf.save("fractal.png").unwrap();
 
-        count -= 1;
-        if count <= 0 {
-            return imgbuf
-        }
-    }
+    //     count -= 1;
+    //     if count <= 0 {
+    //         return
+    //     }
+    // }
 
     //let mut image = image::ImageBuffer::new(imgx, imgy);
     //for (x, y, p) in imgbuf.enumerate_pixels_mut() {
@@ -193,7 +197,6 @@ pub fn spawn(n: u32, parameters: Parameters) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
     //         }
     //     }
     // }
-    imgbuf
 }
 /*
 fn julia(a: f32, b: f32, ca: f32, cb: f32, i: i32, max: i32) -> i32 {

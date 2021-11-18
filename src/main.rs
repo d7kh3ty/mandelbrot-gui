@@ -18,15 +18,15 @@ struct Opt {
     size: String,
 
     /// define the center position of the image
-    #[structopt(short, long, default_value = "0.35,0.30")]
+    #[structopt(short, long, default_value = "-0.45,0.0")]
     position: String,
 
     /// zoom
-    #[structopt(short, long, default_value = "1.5")]
+    #[structopt(short, long, default_value = "-0.3")]
     scale: f32,
 
     /// the number of iterations to be ran
-    #[structopt(short, long, default_value = "5000")]
+    #[structopt(short, long, default_value = "200")]
     iterations: u32,
 }
 
@@ -55,6 +55,7 @@ fn new_params(size: String, position: String, scale: f32, iterations: u32) -> Pa
         Ok(y) => y,
         Err(e) => panic!("invalid argument to position: {}", e),
     };
+    println!("{px},{py}");
 
     Parameters {
         size: ImageSize { x: sx, y: sy },
@@ -64,25 +65,42 @@ fn new_params(size: String, position: String, scale: f32, iterations: u32) -> Pa
     }
 }
 
-use std::time::Duration;
+use std::{sync::mpsc,
+          thread,
+          time::Duration};
 
 extern crate sdl2;
+
 use sdl2::{event::Event,
            gfx::primitives::DrawRenderer,
            keyboard::Keycode,
-           pixels::Color,
-           rect::Rect};
+           pixels::Color};
 
 pub fn main() {
     let opt = Opt::from_args();
-    let parameters = new_params(opt.size, opt.position, opt.scale, opt.iterations);
-    let imgbuf = spawn(opt.cores, parameters);
+    let mut parameters = new_params(opt.size, opt.position, opt.scale, opt.iterations);
+    // let mut imgbuf = match ImageReader::open("fractal.png") {
+    //     Ok(img) => match img.decode() {
+    //         Ok(i) => i.to_rgb8(),
+    //         Err(_) => image::RgbImage::new(imgx, imgy),
+    //     },
+    //     Err(_) => image::RgbImage::new(imgx, imgy),
+    // };
+    let mut imgbuf = image::RgbImage::new(1024, 1024);
+    let (tx, rx) = mpsc::channel();
+    let sender = tx.clone();
+    let params = parameters.clone();
+    let c = opt.cores;
+    thread::spawn(move || {
+        spawn(sender, c, &params);
+    });
+    let mut reciever = rx.try_iter();
 
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
     let window = video_subsystem
-        .window("rust-sdl2 demo", 1024, 1024)
+        .window("daedal", 1024, 1024)
         .position_centered()
         .build()
         .unwrap();
@@ -91,11 +109,11 @@ pub fn main() {
 
     let mut event_pump = sdl_context.event_pump().unwrap();
     //let mut i = 0;
+    use std::time::SystemTime;
     'running: loop {
+        let time = SystemTime::now();
         //i = (i + 1) % 255;
-        canvas.set_draw_color(Color::RGB(0, 0, 0));
-        canvas.clear();
-        canvas.set_draw_color(Color::RGB(255, 0, 255));
+
         //canvas.fill_rect(Rect::new(10, 50, 780, 580)).unwrap();
         // for i in 0..600 {
         //     for j in 0..i {
@@ -111,17 +129,22 @@ pub fn main() {
         //    Err(_) => image::RgbImage::new(1024, 1024),
         //};
 
-        for (x, y, p) in imgbuf.enumerate_pixels() {
-            //let pixel = imgbuf.get_pixel_mut(x, y);
-            let image::Rgb(data) = *p;
-            if data[0] > 0 || data[1] > 0 || data[2] > 0 {
-                //*pixel = image::Rgb([255, 0, 255]);
-                //*pixel = *p;
-                canvas
-                    .pixel(x as i16, y as i16, Color::RGB(data[0], data[1], data[2]))
-                    .unwrap();
+        if let Ok(img) = rx.try_recv() {
+            println!("img section received!");
+            for (x, y, p) in img.enumerate_pixels() {
+                let pixel = imgbuf.get_pixel_mut(x, y);
+                let image::Rgb(data) = *p;
+                if data[0] > 0 || data[1] > 0 || data[2] > 0 {
+                    //*pixel = image::Rgb([255, 0, 255]);
+                    *pixel = *p;
+                    canvas
+                        .pixel(x as i16, y as i16, Color::RGB(data[0], data[1], data[2]))
+                        .unwrap();
+                }
             }
+            //println!("img section processed!");
         }
+
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
@@ -129,12 +152,28 @@ pub fn main() {
                     keycode: Some(Keycode::Escape),
                     ..
                 } => break 'running,
+                Event::KeyDown {
+                    keycode: Some(Keycode::Left),
+                    ..
+                } => {
+                    parameters.position.x -= 0.1;
+                    let sender = tx.clone();
+                    let params = parameters.clone();
+                    let c = opt.cores;
+                    thread::spawn(move || {
+                        spawn(sender, c, &params);
+                    });
+                }
                 _ => {}
             }
         }
         // The rest of the game loop goes here...
 
+        println!("{}", time.elapsed().unwrap().as_millis());
+        canvas
+            .string(10, 10, "fuck", Color::RGB(255, 255, 255))
+            .unwrap();
         canvas.present();
-        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+        //::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
