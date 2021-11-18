@@ -110,11 +110,23 @@ pub fn main() {
     let mut event_pump = sdl_context.event_pump().unwrap();
     //let mut i = 0;
     use std::time::SystemTime;
+    canvas.clear();
     'running: loop {
         let time = SystemTime::now();
         //i = (i + 1) % 255;
 
         canvas.clear();
+        for (x, y, p) in imgbuf.enumerate_pixels() {
+            //let pixel = imgbuf.get_pixel_mut(x, y);
+            let image::Rgb(data) = *p;
+            if data[0] > 0 || data[1] > 0 || data[2] > 0 {
+                //*pixel = image::Rgb([255, 0, 255]);
+                //*pixel = *p;
+                canvas
+                    .pixel(x as i16, y as i16, Color::RGB(data[0], data[1], data[2]))
+                    .unwrap();
+            }
+        }
         //canvas.fill_rect(Rect::new(10, 50, 780, 580)).unwrap();
         // for i in 0..600 {
         //     for j in 0..i {
@@ -138,9 +150,9 @@ pub fn main() {
                 if data[0] > 0 || data[1] > 0 || data[2] > 0 {
                     //*pixel = image::Rgb([255, 0, 255]);
                     *pixel = *p;
-                    // canvas
-                    //     .pixel(x as i16, y as i16, Color::RGB(data[0], data[1], data[2]))
-                    //     .unwrap();
+                    canvas
+                        .pixel(x as i16, y as i16, Color::RGB(data[0], data[1], data[2]))
+                        .unwrap();
                 }
             }
             //println!("img section processed!");
@@ -157,7 +169,8 @@ pub fn main() {
                     keycode: Some(Keycode::Left),
                     ..
                 } => {
-                    parameters.position.x -= 0.1;
+                    canvas.clear();
+                    parameters.position.x -= 0.1 * parameters.scale;
                     let sender = tx.clone();
                     let params = parameters.clone();
                     let c = opt.cores;
@@ -172,9 +185,14 @@ pub fn main() {
 
         println!("{}", time.elapsed().unwrap().as_millis());
         canvas
-            .string(10, 10, "fuck", Color::RGB(255, 255, 255))
+            .string(
+                10,
+                10,
+                time.elapsed().unwrap().as_millis().to_string().as_str(),
+                Color::RGB(255, 255, 255),
+            )
             .unwrap();
         canvas.present();
-        //::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+        ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
 }
