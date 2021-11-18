@@ -140,7 +140,7 @@ pub fn spawn(n: u32, parameters: Parameters) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
                 *pixel = *p;
             }
         }
-        imgbuf.save("fractal.png").unwrap();
+        //imgbuf.save("fractal.png").unwrap();
 
         count -= 1;
         if count <= 0 {
