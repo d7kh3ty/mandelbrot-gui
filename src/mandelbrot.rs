@@ -20,14 +20,28 @@ pub struct Parameters {
     pub iterations: u32,
 }
 
-use std::{sync::{mpsc,
-                 mpsc::{RecvError,
-                        TryRecvError}},
-          thread,
-          time::Duration};
+#[derive(Debug)]
+pub struct ImgSec {
+    pub x:   u32,
+    pub y:   u32,
+    pub buf: ImageBuffer<Rgb<u8>, Vec<u8>>,
+}
 
 use image::{ImageBuffer,
             Rgb};
+
+impl ImgSec {
+    fn new(x1: u32, x2: u32, y1: u32, y2: u32) -> Self {
+        Self {
+            x:   x1,
+            y:   y1,
+            buf: ImageBuffer::new(x2 - x1, y2 - y1),
+        }
+    }
+}
+
+use std::{sync::mpsc,
+          thread};
 
 fn mandel(dx: f64, dy: f64, max: u32) -> u32 {
     let mut a: f64 = 0.0;
@@ -52,7 +66,7 @@ fn mandel(dx: f64, dy: f64, max: u32) -> u32 {
 
 fn gen(
     recv_cancel: mpsc::Receiver<()>, x1: u32, x2: u32, y1: u32, y2: u32, parameters: Parameters,
-) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
+) -> ImgSec {
     let imgx = parameters.size.x;
     let imgy = parameters.size.y;
     let posx = parameters.position.x;
@@ -60,16 +74,15 @@ fn gen(
     let scale = (10.0_f64).powf(parameters.scale);
     let iterations = parameters.iterations;
     // generate the fractal
-    let mut imgbuf = image::ImageBuffer::new(imgx, imgy);
+
+    let mut img = ImgSec::new(x1, x2, y1, y2);
+
     for x in x1..x2 {
         print!("{:.2}%\r", (x as f64 / x2 as f64) * 100.0);
         for y in y1..y2 {
-            match recv_cancel.try_recv() {
-                Ok(_) => {
-                    println!("message received. stopping.");
-                    return imgbuf
-                }
-                Err(_) => {}
+            if let Ok(_) = recv_cancel.try_recv() {
+                println!("message received. stopping.");
+                return img
             }
             //let dx: f64 = (x as f64 / imgx as f64) as f64;
             //let dy: f64 = (y as f64 / imgy as f64) as f64;
@@ -86,29 +99,31 @@ fn gen(
             //f = ((i % 100) * 255) as u8;
             //println!("{}, {}: \n i == {}, f == {}", dx, dy, i, f);
 
-            let pixel = imgbuf.get_pixel_mut(x, y);
+            //let pixel = img.buf.get_pixel_mut(x - x1, y - y1);
             //let image::Rgb(data) = *pixel;
-            if i == iterations {
-                *pixel = image::Rgb([1, 1, 1]);
-            } else {
-                let band = ((i / 256) % 4) as u8;
-                let c: u8 = (i % 256) as u8;
-                *pixel = match band {
-                    0 => image::Rgb([c, 0, c]),
-                    1 => image::Rgb([255 - c, c, 255]),
-                    2 => image::Rgb([255, 255 - c, c]),
-                    3 => image::Rgb([255 - c, 0, 255 - c]),
-                    _ => image::Rgb([0, 0, 0]),
-                };
-            }
+            img.buf.put_pixel(x - x1, y - y1, {
+                if i == iterations {
+                    image::Rgb([1, 1, 1])
+                } else {
+                    let band = ((i / 256) % 4) as u8;
+                    let c: u8 = (i % 256) as u8;
+                    match band {
+                        0 => image::Rgb([c, 0, c]),
+                        1 => image::Rgb([255 - c, c, 255]),
+                        2 => image::Rgb([255, 255 - c, c]),
+                        3 => image::Rgb([255 - c, 0, 255 - c]),
+                        _ => image::Rgb([0, 0, 0]),
+                    }
+                }
+            })
         }
     }
     println!("{}, {}, {}, {}", x1, x2, y1, y2);
-    imgbuf
+    img
 }
 
 pub fn create_new_thread(
-    tx: mpsc::Sender<ImageBuffer<Rgb<u8>, Vec<u8>>>, c: u32, parameters: Parameters,
+    tx: mpsc::Sender<ImgSec>, c: u32, parameters: Parameters,
 ) -> mpsc::Sender<()> {
     let (please_stop, recv_cancel) = mpsc::channel();
 
@@ -120,8 +135,7 @@ pub fn create_new_thread(
 }
 
 fn spawn(
-    tx: mpsc::Sender<ImageBuffer<Rgb<u8>, Vec<u8>>>, recv_cancel: mpsc::Receiver<()>, n: u32,
-    parameters: &Parameters,
+    tx: mpsc::Sender<ImgSec>, recv_cancel: mpsc::Receiver<()>, n: u32, parameters: &Parameters,
 ) -> Vec<std::thread::JoinHandle<()>> {
     // loop {
     //     println!("waiting to be cancelled.....");
@@ -180,7 +194,7 @@ fn spawn(
                     println!("thread {count} done");
                     match s.send(f) {
                         Ok(_) => {}
-                        Err(e) => eprintln!("fuck, could not return image buffer: {e}"),
+                        Err(e) => eprintln!("fuck, could not return image section: {e}"),
                     }
                 }));
                 killall.push(please_stop);

@@ -6,7 +6,7 @@ use structopt::StructOpt;
 #[structopt(name = "mndlrs")]
 struct Opt {
     /// number of cores to run on
-    #[structopt(short, long, default_value = "4")]
+    #[structopt(short, long, default_value = "64")]
     cores: u32,
 
     /// image output location
@@ -26,7 +26,7 @@ struct Opt {
     scale: f64,
 
     /// the number of iterations to be ran
-    #[structopt(short, long, default_value = "200")]
+    #[structopt(short, long, default_value = "1000")]
     iterations: u32,
 }
 
@@ -74,6 +74,24 @@ use sdl2::{event::{Event,
            gfx::primitives::DrawRenderer,
            keyboard::Keycode,
            pixels::Color};
+use image::{ImageBuffer,
+            Rgb,
+            RgbImage};
+
+fn receive_imgbuf<I>(receiver: I, imgbuf: &mut ImageBuffer<Rgb<u8>, Vec<u8>>)
+where
+    I: IntoIterator<Item = ImgSec>, {
+    //let mut reciever = rx.try_iter();
+    for img in receiver {
+        println!("img section received!");
+        for (x, y, p) in img.buf.enumerate_pixels() {
+            let image::Rgb(data) = *p;
+            if data[0] > 0 || data[1] > 0 || data[2] > 0 {
+                imgbuf.put_pixel(x + img.x, y + img.y, *p);
+            }
+        }
+    }
+}
 
 pub fn main() {
     let sdl_context = sdl2::init().unwrap();
@@ -88,79 +106,29 @@ pub fn main() {
         .unwrap();
 
     let mut canvas = window.into_canvas().present_vsync().build().unwrap();
-
     let mut event_pump = sdl_context.event_pump().unwrap();
 
-    // let mut imgbuf = match ImageReader::open("fractal.png") {
-    //     Ok(img) => match img.decode() {
-    //         Ok(i) => i.to_rgb8(),
-    //         Err(_) => image::RgbImage::new(imgx, imgy),
-    //     },
-    //     Err(_) => image::RgbImage::new(imgx, imgy),
-    // };
-    let mut imgbuf = image::RgbImage::new(parameters.size.x, parameters.size.y);
+    let mut imgbuf = RgbImage::new(parameters.size.x, parameters.size.y);
     let (tx, rx) = mpsc::channel();
 
     let mut please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
-    //let mut i = 0;
+
     use std::time::SystemTime;
     canvas.clear();
     'running: loop {
-        let size = canvas.output_size().unwrap();
-        parameters.size.x = size.0;
-        parameters.size.y = size.1;
-
         let time = SystemTime::now();
-        //i = (i + 1) % 255;
 
         canvas.clear();
         for (x, y, p) in imgbuf.enumerate_pixels() {
-            //let pixel = imgbuf.get_pixel_mut(x, y);
             let image::Rgb(data) = *p;
             if data[0] > 0 || data[1] > 0 || data[2] > 0 {
-                //*pixel = image::Rgb([255, 0, 255]);
-                //*pixel = *p;
                 canvas
                     .pixel(x as i16, y as i16, Color::RGB(data[0], data[1], data[2]))
                     .unwrap();
             }
         }
-        //canvas.fill_rect(Rect::new(10, 50, 780, 580)).unwrap();
-        // for i in 0..600 {
-        //     for j in 0..i {
-        //         canvas.pixel(j, i, Color::RGB(255, 0, 255)).unwrap();
-        //     }
-        // }
-        //use image::io::Reader as ImageReader;
-        //let mut imgbuf = match ImageReader::open("fractal.png") {
-        //    Ok(img) => match img.decode() {
-        //        Ok(i) => i.to_rgb8(),
-        //        Err(_) => image::RgbImage::new(1024, 1024),
-        //    },
-        //    Err(_) => image::RgbImage::new(1024, 1024),
-        //};
 
-        loop {
-            if let Ok(img) = rx.try_recv() {
-                println!("img section received!");
-                for (x, y, p) in img.enumerate_pixels() {
-                    //let pixel = imgbuf.get_pixel_mut(x, y);
-                    let image::Rgb(data) = *p;
-                    if data[0] > 0 || data[1] > 0 || data[2] > 0 {
-                        //*pixel = image::Rgb([255, 0, 255]);
-                        //*pixel = *p;
-                        imgbuf.put_pixel(x, y, *p);
-                        canvas
-                            .pixel(x as i16, y as i16, Color::RGB(data[0], data[1], data[2]))
-                            .unwrap();
-                    }
-                }
-                //println!("img section processed!");
-            } else {
-                println!("none recieved");
-                break
-            }
-        }
+        receive_imgbuf(rx.try_iter(), &mut imgbuf);
 
         for event in event_pump.poll_iter() {
             match event {
@@ -285,30 +253,14 @@ pub fn main() {
                     //let end = create_new_thread(tx2, 16, parameters.clone());
                     //let (end, recv_cancel) = mpsc::channel();
 
-                    let c = opt.cores;
-                    let params = parameters.clone();
-
                     eprintln!("spawning threads....");
-                    let please_stop = create_new_thread(tx2, c, parameters.clone());
-                    //let threads = spawn(tx2, recv_cancel, c, &params);
-
-                    // for thread in threads {
-                    //     thread.join().unwrap();
-                    // }
+                    let please_stop = create_new_thread(tx2, opt.cores, parameters.clone());
                     let mut imgbuf = image::RgbImage::new(parameters.size.x, parameters.size.y);
 
                     eprintln!("processing threads....");
-                    for mut img in rx2.iter().take(opt.cores as usize) {
-                        println!("img section received!");
-                        for (x, y, p) in img.enumerate_pixels() {
-                            let pixel = imgbuf.get_pixel_mut(x, y);
-                            let image::Rgb(data) = *p;
-                            if data[0] > 0 || data[1] > 0 || data[2] > 0 {
-                                //*pixel = image::Rgb([255, 0, 255]);
-                                *pixel = *p;
-                            }
-                        }
-                    }
+
+                    receive_imgbuf(rx2.iter().take(opt.cores as usize), &mut imgbuf);
+
                     eprintln!("saving image....");
                     let _ = please_stop.send(());
                     match imgbuf.save(opt.output.clone()) {
@@ -329,6 +281,7 @@ pub fn main() {
                 Color::RGB(255, 255, 255),
             )
             .unwrap();
+
         canvas.present();
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
     }
@@ -351,19 +304,7 @@ mod tests {
 
         thread::sleep(Duration::from_millis(500));
 
-        for img in rx.try_iter() {
-            println!("img section received!");
-            for (x, y, p) in img.enumerate_pixels() {
-                //println!("{x}, {y}");
-                //let pixel = imgbuf.get_pixel_mut(x, y);
-                let image::Rgb(data) = *p;
-                if data[0] > 0 || data[1] > 0 || data[2] > 0 {
-                    //*pixel = image::Rgb([255, 0, 255]);
-                    //*pixel = *p;
-                    imgbuf.put_pixel(x, y, *p);
-                }
-            }
-        }
+        receive_imgbuf(rx.try_iter(), &mut imgbuf);
         eprintln!("saving image....");
 
         let _ = please_stop.send(());
