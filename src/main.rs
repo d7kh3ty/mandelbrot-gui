@@ -69,14 +69,25 @@ use std::{sync::mpsc,
           thread,
           time::Duration};
 
-extern crate sdl2;
-
 use sdl2::{event::Event,
            gfx::primitives::DrawRenderer,
            keyboard::Keycode,
            pixels::Color};
 
 pub fn main() {
+    let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
+
+    let window = video_subsystem
+        .window("daedal", 1024, 1024)
+        .position_centered()
+        .build()
+        .unwrap();
+
+    let mut canvas = window.into_canvas().present_vsync().build().unwrap();
+
+    let mut event_pump = sdl_context.event_pump().unwrap();
+
     let opt = Opt::from_args();
     let mut parameters = new_params(opt.size, opt.position, opt.scale, opt.iterations);
     // let mut imgbuf = match ImageReader::open("fractal.png") {
@@ -90,19 +101,6 @@ pub fn main() {
     let (tx, rx) = mpsc::channel();
 
     let mut please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
-
-    let sdl_context = sdl2::init().unwrap();
-    let video_subsystem = sdl_context.video().unwrap();
-
-    let window = video_subsystem
-        .window("daedal", 1024, 1024)
-        .position_centered()
-        .build()
-        .unwrap();
-
-    let mut canvas = window.into_canvas().present_vsync().build().unwrap();
-
-    let mut event_pump = sdl_context.event_pump().unwrap();
     //let mut i = 0;
     use std::time::SystemTime;
     canvas.clear();
@@ -141,15 +139,16 @@ pub fn main() {
         //    Err(_) => image::RgbImage::new(1024, 1024),
         //};
 
-        while true {
+        loop {
             if let Ok(img) = rx.try_recv() {
                 println!("img section received!");
                 for (x, y, p) in img.enumerate_pixels() {
-                    let pixel = imgbuf.get_pixel_mut(x, y);
+                    //let pixel = imgbuf.get_pixel_mut(x, y);
                     let image::Rgb(data) = *p;
                     if data[0] > 0 || data[1] > 0 || data[2] > 0 {
                         //*pixel = image::Rgb([255, 0, 255]);
-                        *pixel = *p;
+                        //*pixel = *p;
+                        imgbuf.put_pixel(x, y, *p);
                         canvas
                             .pixel(x as i16, y as i16, Color::RGB(data[0], data[1], data[2]))
                             .unwrap();
@@ -190,8 +189,6 @@ pub fn main() {
                     ..
                 } => {
                     let _ = please_stop.send(());
-                    //canvas.clear();
-                    //imgbuf = image::RgbImage::new(1024, 1024);
                     let mut z = 0.1 / (10.0_f64).powf(parameters.scale);
                     if z > 0.0 {
                         z = -z;
@@ -266,15 +263,43 @@ pub fn main() {
                     ..
                 } => {
                     let _ = please_stop.send(());
-                    let (tx, rx) = mpsc::channel();
+                    let (tx2, rx2) = mpsc::channel();
                     parameters.size.x = 4086;
                     parameters.size.y = 4086;
-                    create_new_thread(tx, 64, parameters);
-                    match rx.recv() {
-                        Ok(imgbuf) => imgbuf.save("fractal.png").unwrap(),
-                        Err(e) => eprintln!("could not save image :( {e}"),
+                    //let end = create_new_thread(tx2, 16, parameters.clone());
+                    let (end, recv_cancel) = mpsc::channel();
+
+                    let c = opt.cores;
+                    let params = parameters.clone();
+
+                    let threads = spawn(tx2, recv_cancel, c, &params);
+
+                    for thread in threads {
+                        thread.join().unwrap();
                     }
-                    return
+                    let mut imgbuf = image::RgbImage::new(parameters.size.x, parameters.size.y);
+
+                    for mut img in rx2.iter().take(opt.cores as usize) {
+                        println!("img section received!");
+                        for (x, y, p) in img.enumerate_pixels() {
+                            let pixel = imgbuf.get_pixel_mut(x, y);
+                            let image::Rgb(data) = *p;
+                            if data[0] > 0 || data[1] > 0 || data[2] > 0 {
+                                //*pixel = image::Rgb([255, 0, 255]);
+                                *pixel = *p;
+                            }
+                        }
+                    }
+                    let _ = end.send(());
+                    match imgbuf.save(opt.output.clone()) {
+                        Ok(_) => return,
+                        Err(e) => eprintln!("could not save image {e}"),
+                    }
+
+                    loop {
+                        println!("waiting for image section");
+                        //println!("img section processed!");
+                    }
                 }
                 _ => {}
             }

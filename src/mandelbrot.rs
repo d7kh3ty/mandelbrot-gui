@@ -69,11 +69,7 @@ fn gen(
                     println!("message received. stopping.");
                     return imgbuf
                 }
-                Err(TryRecvError::Disconnected) => {
-                    println!("disconnected.");
-                    return imgbuf
-                }
-                Err(TryRecvError::Empty) => {}
+                Err(_) => {}
             }
             //let dx: f64 = (x as f64 / imgx as f64) as f64;
             //let dy: f64 = (y as f64 / imgy as f64) as f64;
@@ -124,7 +120,7 @@ pub fn create_new_thread(
 pub fn spawn(
     tx: mpsc::Sender<ImageBuffer<Rgb<u8>, Vec<u8>>>, recv_cancel: mpsc::Receiver<()>, n: u32,
     parameters: &Parameters,
-) {
+) -> Vec<std::thread::JoinHandle<()>> {
     // loop {
     //     println!("waiting to be cancelled.....");
     //     thread::sleep(Duration::from_millis(500));
@@ -180,23 +176,27 @@ pub fn spawn(
                 threads.push(thread::spawn(move || {
                     let f = gen(recv_cancel_2, x * sx, x * sx + sx, y * sy, y * sy + sy, p);
                     println!("thread {count} done");
-                    s.send(f).unwrap();
+                    match s.send(f) {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("fuck, could not return image buffer: {e}"),
+                    }
                 }));
                 killall.push(please_stop);
             }
         }
     }
-    match recv_cancel.recv() {
-        Ok(_) => {
-            println!("message received. stopping.");
-            for s in killall {
-                let _ = s.send(());
-            }
-        }
-        Err(e) => {
-            println!("cant recieve message: {e}");
-        }
-    }
+    // match recv_cancel.recv() {
+    //     Ok(_) => {
+    //         println!("message received. stopping.");
+    //         for s in killall {
+    //             let _ = s.send(());
+    //         }
+    //     }
+    //     Err(e) => {
+    //         println!("no message recieved: {e}");
+    //     }
+    // }
+    threads
     //use image::io::Reader as ImageReader;
 
     // for img in rx {
