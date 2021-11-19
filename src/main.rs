@@ -14,7 +14,7 @@ struct Opt {
     output: String,
 
     /// size of the image <width>x<height>
-    #[structopt(long, default_value = "1024x1024")]
+    #[structopt(long, default_value = "800x640")]
     size: String,
 
     /// define the center position of the image
@@ -69,7 +69,8 @@ use std::{sync::mpsc,
           thread,
           time::Duration};
 
-use sdl2::{event::Event,
+use sdl2::{event::{Event,
+                   WindowEvent},
            gfx::primitives::DrawRenderer,
            keyboard::Keycode,
            pixels::Color};
@@ -78,8 +79,10 @@ pub fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
 
+    let opt = Opt::from_args();
+    let mut parameters = new_params(opt.size, opt.position, opt.scale, opt.iterations);
     let window = video_subsystem
-        .window("daedal", 1024, 1024)
+        .window("daedal", parameters.size.x, parameters.size.y)
         .position_centered()
         .build()
         .unwrap();
@@ -88,8 +91,6 @@ pub fn main() {
 
     let mut event_pump = sdl_context.event_pump().unwrap();
 
-    let opt = Opt::from_args();
-    let mut parameters = new_params(opt.size, opt.position, opt.scale, opt.iterations);
     // let mut imgbuf = match ImageReader::open("fractal.png") {
     //     Ok(img) => match img.decode() {
     //         Ok(i) => i.to_rgb8(),
@@ -97,7 +98,7 @@ pub fn main() {
     //     },
     //     Err(_) => image::RgbImage::new(imgx, imgy),
     // };
-    let mut imgbuf = image::RgbImage::new(1024, 1024);
+    let mut imgbuf = image::RgbImage::new(parameters.size.x, parameters.size.y);
     let (tx, rx) = mpsc::channel();
 
     let mut please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
@@ -172,6 +173,20 @@ pub fn main() {
                     keycode: Some(Keycode::Q),
                     ..
                 } => break 'running,
+                Event::Window {
+                    win_event: WindowEvent::Resized(..),
+                    ..
+                } => {
+                    let _ = please_stop.send(());
+                    thread::sleep(Duration::from_millis(1000));
+
+                    let size = canvas.output_size().unwrap();
+                    parameters.size.x = size.0;
+                    parameters.size.y = size.1;
+                    imgbuf = image::RgbImage::new(parameters.size.x, parameters.size.y);
+
+                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone())
+                }
                 Event::KeyDown {
                     keycode: Some(Keycode::Up),
                     ..
@@ -264,21 +279,25 @@ pub fn main() {
                 } => {
                     let _ = please_stop.send(());
                     let (tx2, rx2) = mpsc::channel();
-                    parameters.size.x = 4086;
-                    parameters.size.y = 4086;
+                    parameters.size.x *= 4;
+                    parameters.size.y *= 4;
+                    eprintln!("taking printscreen....");
                     //let end = create_new_thread(tx2, 16, parameters.clone());
-                    let (end, recv_cancel) = mpsc::channel();
+                    //let (end, recv_cancel) = mpsc::channel();
 
                     let c = opt.cores;
                     let params = parameters.clone();
 
-                    let threads = spawn(tx2, recv_cancel, c, &params);
+                    eprintln!("spawning threads....");
+                    let please_stop = create_new_thread(tx2, c, parameters.clone());
+                    //let threads = spawn(tx2, recv_cancel, c, &params);
 
-                    for thread in threads {
-                        thread.join().unwrap();
-                    }
+                    // for thread in threads {
+                    //     thread.join().unwrap();
+                    // }
                     let mut imgbuf = image::RgbImage::new(parameters.size.x, parameters.size.y);
 
+                    eprintln!("processing threads....");
                     for mut img in rx2.iter().take(opt.cores as usize) {
                         println!("img section received!");
                         for (x, y, p) in img.enumerate_pixels() {
@@ -290,15 +309,11 @@ pub fn main() {
                             }
                         }
                     }
-                    let _ = end.send(());
+                    eprintln!("saving image....");
+                    let _ = please_stop.send(());
                     match imgbuf.save(opt.output.clone()) {
-                        Ok(_) => return,
+                        Ok(_) => println!("image saved!"),
                         Err(e) => eprintln!("could not save image {e}"),
-                    }
-
-                    loop {
-                        println!("waiting for image section");
-                        //println!("img section processed!");
                     }
                 }
                 _ => {}
@@ -316,5 +331,43 @@ pub fn main() {
             .unwrap();
         canvas.present();
         ::std::thread::sleep(Duration::new(0, 1_000_000_000u32 / 60));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn dynamic_resolution() {
+        let opt = Opt::from_args();
+        let mut parameters = new_params(opt.size, opt.position, opt.scale, opt.iterations);
+        let (tx, rx) = mpsc::channel();
+
+        parameters.size.x = 800;
+        parameters.size.y = 640;
+
+        let mut imgbuf = image::RgbImage::new(parameters.size.x, parameters.size.y);
+        let please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+
+        thread::sleep(Duration::from_millis(500));
+
+        for img in rx.try_iter() {
+            println!("img section received!");
+            for (x, y, p) in img.enumerate_pixels() {
+                //println!("{x}, {y}");
+                //let pixel = imgbuf.get_pixel_mut(x, y);
+                let image::Rgb(data) = *p;
+                if data[0] > 0 || data[1] > 0 || data[2] > 0 {
+                    //*pixel = image::Rgb([255, 0, 255]);
+                    //*pixel = *p;
+                    imgbuf.put_pixel(x, y, *p);
+                }
+            }
+        }
+        eprintln!("saving image....");
+
+        let _ = please_stop.send(());
+        imgbuf.save("test.png").unwrap();
+        assert_eq!(1, 0);
     }
 }
