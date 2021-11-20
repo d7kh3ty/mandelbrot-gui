@@ -27,8 +27,6 @@ where
 }
 
 pub fn main() {
-    let sdl_context = sdl2::init().unwrap();
-    let video_subsystem = sdl_context.video().unwrap();
     let mut opt = Parameters::from_opt();
 
     match &opt.command {
@@ -74,6 +72,9 @@ pub fn main() {
         }
         None => (),
     }
+
+    let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
 
     let window = video_subsystem
         .window("daedal", opt.size.x, opt.size.y)
