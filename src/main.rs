@@ -1,74 +1,8 @@
-use daedal::mandelbrot::*;
-use structopt::StructOpt;
-
-/// A mandelbrot image generator, written in Rust!!
-#[derive(StructOpt, Debug)]
-#[structopt(name = "mndlrs")]
-struct Opt {
-    /// number of cores to run on
-    #[structopt(short, long, default_value = "64")]
-    cores: u32,
-
-    /// image output location
-    #[structopt(short, default_value = "fractal.png")]
-    output: String,
-
-    /// size of the image <width>x<height>
-    #[structopt(long, default_value = "800x640")]
-    size: String,
-
-    /// define the center position of the image
-    #[structopt(short, long, default_value = "-0.45,0.0")]
-    position: String,
-
-    /// zoom
-    #[structopt(short, long, default_value = "-0.3")]
-    scale: f64,
-
-    /// the number of iterations to be ran
-    #[structopt(short, long, default_value = "1000")]
-    iterations: u32,
-}
-
-fn new_params(size: String, position: String, scale: f64, iterations: u32) -> Parameters {
-    let split = size.split('x');
-    let s: Vec<&str> = split.collect();
-
-    let sx = match s[0].parse() {
-        Ok(x) => x,
-        Err(e) => panic!("invalid argument to size: {}", e),
-    };
-    let sy = match s[1].parse() {
-        Ok(x) => x,
-        Err(e) => panic!("invalid argument to size: {}", e),
-    };
-
-    let split = position.split(',');
-    let s: Vec<&str> = split.collect();
-
-    println!("{},{}", s[0], s[1]);
-    let px = match s[0].parse::<f64>() {
-        Ok(x) => x,
-        Err(e) => panic!("invalid argument to position: {}", e),
-    };
-    let py = match s[1].parse::<f64>() {
-        Ok(y) => y,
-        Err(e) => panic!("invalid argument to position: {}", e),
-    };
-    println!("{px},{py}");
-
-    Parameters {
-        size: ImageSize { x: sx, y: sy },
-        position: Position { x: px, y: py },
-        scale,
-        iterations,
-    }
-}
-
 use std::{sync::mpsc,
           thread,
           time::Duration};
 
+use daedal::mandelbrot::*;
 use sdl2::{event::{Event,
                    WindowEvent},
            gfx::primitives::DrawRenderer,
@@ -83,7 +17,6 @@ where
     I: IntoIterator<Item = ImgSec>, {
     //let mut reciever = rx.try_iter();
     for img in receiver {
-        println!("img section received!");
         for (x, y, p) in img.buf.enumerate_pixels() {
             let image::Rgb(data) = *p;
             if data[0] > 0 || data[1] > 0 || data[2] > 0 {
@@ -96,11 +29,54 @@ where
 pub fn main() {
     let sdl_context = sdl2::init().unwrap();
     let video_subsystem = sdl_context.video().unwrap();
+    let mut opt = Parameters::from_opt();
 
-    let opt = Opt::from_args();
-    let mut parameters = new_params(opt.size, opt.position, opt.scale, opt.iterations);
+    match &opt.command {
+        Some(Command::Screenshot { .. }) => {
+            println!("taking screenshot......");
+            let (tx, rx) = mpsc::channel();
+            let kill = create_new_thread(tx, opt.threads, opt.clone());
+
+            let mut imgbuf = RgbImage::new(opt.size.x, opt.size.y);
+            receive_imgbuf(rx.iter().take(opt.threads as usize), &mut imgbuf);
+            kill.send(()).unwrap();
+            match imgbuf.save(opt.output) {
+                Ok(_) => return,
+                Err(e) => panic!("could not save image! {}", e),
+            }
+        }
+        Some(Command::Animation {
+            size: _,
+            folder,
+            start,
+            end,
+            inc,
+            position: _,
+        }) => {
+            opt.scale = *start;
+            opt.iterations = 4000;
+            let mut count = 0;
+            let total = (*end - *start) / *inc;
+            while opt.scale < *end {
+                count += 1;
+                opt.scale += *inc;
+                let (tx, rx) = mpsc::channel();
+                let kill = create_new_thread(tx.clone(), opt.threads, opt.clone());
+
+                let mut imgbuf = RgbImage::new(opt.size.x, opt.size.y);
+                receive_imgbuf(rx.iter().take(opt.threads as usize), &mut imgbuf);
+                kill.send(()).unwrap();
+                match imgbuf.save(format!("{folder}/{count}.png")) {
+                    Ok(_) => println!("image {count}/{total} saved!"),
+                    Err(e) => panic!("could not save image! {}", e),
+                }
+            }
+        }
+        None => (),
+    }
+
     let window = video_subsystem
-        .window("daedal", parameters.size.x, parameters.size.y)
+        .window("daedal", opt.size.x, opt.size.y)
         .position_centered()
         .build()
         .unwrap();
@@ -108,10 +84,10 @@ pub fn main() {
     let mut canvas = window.into_canvas().present_vsync().build().unwrap();
     let mut event_pump = sdl_context.event_pump().unwrap();
 
-    let mut imgbuf = RgbImage::new(parameters.size.x, parameters.size.y);
+    let mut imgbuf = RgbImage::new(opt.size.x, opt.size.y);
     let (tx, rx) = mpsc::channel();
 
-    let mut please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+    let mut please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
 
     use std::time::SystemTime;
     canvas.clear();
@@ -149,91 +125,91 @@ pub fn main() {
                     thread::sleep(Duration::from_millis(1000));
 
                     let size = canvas.output_size().unwrap();
-                    parameters.size.x = size.0;
-                    parameters.size.y = size.1;
-                    imgbuf = image::RgbImage::new(parameters.size.x, parameters.size.y);
+                    opt.size.x = size.0;
+                    opt.size.y = size.1;
+                    imgbuf = image::RgbImage::new(opt.size.x, opt.size.y);
 
-                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone())
+                    please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone())
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Up),
                     ..
                 } => {
                     let _ = please_stop.send(());
-                    let mut z = 0.1 / (10.0_f64).powf(parameters.scale);
+                    let mut z = 0.1 / (10.0_f64).powf(opt.scale);
                     if z < 0.0 {
                         z = -z;
                     }
-                    parameters.position.y -= z;
-                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+                    opt.position.y -= z;
+                    please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Down),
                     ..
                 } => {
                     let _ = please_stop.send(());
-                    let mut z = 0.1 / (10.0_f64).powf(parameters.scale);
+                    let mut z = 0.1 / (10.0_f64).powf(opt.scale);
                     if z > 0.0 {
                         z = -z;
                     }
-                    parameters.position.y -= z;
-                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+                    opt.position.y -= z;
+                    please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Left),
                     ..
                 } => {
                     let _ = please_stop.send(());
-                    let mut z = 0.1 / (10.0_f64).powf(parameters.scale);
+                    let mut z = 0.1 / (10.0_f64).powf(opt.scale);
                     if z < 0.0 {
                         z = -z;
                     }
-                    parameters.position.x -= z;
-                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+                    opt.position.x -= z;
+                    please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Right),
                     ..
                 } => {
                     let _ = please_stop.send(());
-                    let mut z = 0.1 / (10.0_f64).powf(parameters.scale);
+                    let mut z = 0.1 / (10.0_f64).powf(opt.scale);
                     if z > 0.0 {
                         z = -z;
                     }
-                    parameters.position.x -= z;
-                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+                    opt.position.x -= z;
+                    please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Equals),
                     ..
                 } => {
                     let _ = please_stop.send(());
-                    parameters.scale += 0.1;
-                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+                    opt.scale += 0.1;
+                    please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::Minus),
                     ..
                 } => {
                     let _ = please_stop.send(());
-                    parameters.scale -= 0.1;
-                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+                    opt.scale -= 0.1;
+                    please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::P),
                     ..
                 } => {
                     let _ = please_stop.send(());
-                    parameters.iterations += 1000;
-                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+                    opt.iterations += 1000;
+                    please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::N),
                     ..
                 } => {
                     let _ = please_stop.send(());
-                    parameters.iterations -= 1000;
-                    please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+                    opt.iterations -= 1000;
+                    please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
                 }
                 Event::KeyDown {
                     keycode: Some(Keycode::C),
@@ -247,26 +223,27 @@ pub fn main() {
                 } => {
                     let _ = please_stop.send(());
                     let (tx2, rx2) = mpsc::channel();
-                    parameters.size.x *= 4;
-                    parameters.size.y *= 4;
+                    opt.size.x *= 4;
+                    opt.size.y *= 4;
                     eprintln!("taking printscreen....");
-                    //let end = create_new_thread(tx2, 16, parameters.clone());
-                    //let (end, recv_cancel) = mpsc::channel();
 
                     eprintln!("spawning threads....");
-                    let please_stop = create_new_thread(tx2, opt.cores, parameters.clone());
-                    let mut imgbuf = image::RgbImage::new(parameters.size.x, parameters.size.y);
+                    let mut imgbuf = image::RgbImage::new(opt.size.x, opt.size.y);
+                    let please_stop = create_new_thread(tx2, opt.threads, opt.clone());
 
-                    eprintln!("processing threads....");
-
-                    receive_imgbuf(rx2.iter().take(opt.cores as usize), &mut imgbuf);
+                    receive_imgbuf(rx2.iter().take(opt.threads as usize), &mut imgbuf);
 
                     eprintln!("saving image....");
                     let _ = please_stop.send(());
-                    match imgbuf.save(opt.output.clone()) {
+                    match imgbuf.save(format!(
+                        "assets/{}-{}-{}.png",
+                        opt.position.x, opt.position.y, opt.scale
+                    )) {
                         Ok(_) => println!("image saved!"),
                         Err(e) => eprintln!("could not save image {e}"),
                     }
+                    opt.size.x /= 4;
+                    opt.size.y /= 4;
                 }
                 _ => {}
             }
@@ -292,15 +269,14 @@ mod tests {
     use super::*;
     #[test]
     fn dynamic_resolution() {
-        let opt = Opt::from_args();
-        let mut parameters = new_params(opt.size, opt.position, opt.scale, opt.iterations);
+        let mut opt = Parameters::from_opt();
         let (tx, rx) = mpsc::channel();
 
-        parameters.size.x = 800;
-        parameters.size.y = 640;
+        opt.size.x = 800;
+        opt.size.y = 640;
 
-        let mut imgbuf = image::RgbImage::new(parameters.size.x, parameters.size.y);
-        let please_stop = create_new_thread(tx.clone(), opt.cores, parameters.clone());
+        let mut imgbuf = image::RgbImage::new(opt.size.x, opt.size.y);
+        let please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
 
         thread::sleep(Duration::from_millis(500));
 
