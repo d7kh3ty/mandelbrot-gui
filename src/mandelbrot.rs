@@ -21,9 +21,34 @@ pub struct Parameters {
     pub threads:    u32,
     pub output:     String,
     pub command:    Option<Command>,
+    pub colours:    Vec<[u8; 3]>,
 }
 
+use std::{convert::TryInto,
+          num::ParseIntError};
+
 use structopt::StructOpt;
+
+fn parse_rgb(src: &str) -> Result<[u8; 3], ParseIntError> {
+    println!("{src}");
+    let x: Vec<u8> = src
+        .split(',')
+        .map(|s| match s.parse::<u8>() {
+            Ok(x) => x,
+            Err(e) => panic!("could not parse int {}", e),
+        })
+        .collect();
+
+    println!("{x:?}");
+
+    Ok(x.try_into().unwrap_or_else(|v: Vec<u8>| {
+        panic!(
+            "{} invalid.\nexpected input of 3 numbers [0-255] <r>,<g>,<b> but it was {}",
+            src,
+            v.len()
+        )
+    }))
+}
 
 /// A mandelbrot image generator, written in Rust!!
 #[derive(StructOpt, Debug)]
@@ -52,6 +77,11 @@ pub struct Opt {
     /// the number of iterations to be ran
     #[structopt(short, long, default_value = "1000")]
     iterations: u32,
+
+    /// colourscheme in the format:
+    /// <r>,<g>,<b> <r>,<g>,<b> ... (e.g. 10,2,4 255,0,255)
+    #[structopt(short, long, parse(try_from_str = parse_rgb), default_value = "0,0,0")]
+    colours: Vec<[u8; 3]>,
 
     #[structopt(subcommand)]
     command: Option<Command>,
@@ -99,7 +129,7 @@ pub enum Command {
 }
 
 impl Parameters {
-    pub fn from_opt() -> Self {
+    pub fn from_options() -> Self {
         let mut opt = Opt::from_args();
         println!("{opt:?}");
 
@@ -122,6 +152,17 @@ impl Parameters {
                 opt.position = position.to_string();
             }
             None => (),
+        }
+
+        if opt.colours.len() <= 1 {
+            opt.colours = vec![
+                [2, 2, 11],
+                [255, 97, 211],
+                [0, 166, 166],
+                [230, 170, 104],
+                [140, 39, 30],
+                [187, 222, 240],
+            ];
         }
 
         let split = opt.size.split('x');
@@ -156,6 +197,7 @@ impl Parameters {
             threads:    opt.threads,
             output:     opt.output,
             command:    opt.command,
+            colours:    opt.colours,
         }
     }
 }
@@ -204,17 +246,9 @@ fn mandel(dx: f64, dy: f64, max: u32) -> u32 {
     i
 }
 
-use std::convert::TryInto;
-fn color_bands(i: u32) -> image::Rgb<u8> {
-    let c: u8 = (i % 256) as u8;
-
-    let scheme = vec![
-        [2, 2, 11],
-        [0, 166, 166],
-        [230, 170, 104],
-        [140, 39, 30],
-        [187, 222, 240],
-    ];
+/// converts any positive integer value into RGB given a colourscheme
+fn colour_bands(scheme: &[[u8; 3]], i: u32) -> image::Rgb<u8> {
+    let c = (i % 256) as i32;
 
     let band = (i / 256) as usize % scheme.len();
     let start = scheme[band];
@@ -227,7 +261,7 @@ fn color_bands(i: u32) -> image::Rgb<u8> {
     let x: Vec<u8> = start
         .iter()
         .zip(end.iter())
-        .map(|(s, e)| ((e - s) * c as i32 / 255 + s) as u8)
+        .map(|(s, e)| (((*e as i32 - *s as i32) * c / 255) + *s as i32) as u8)
         .collect();
 
     image::Rgb(x.try_into().unwrap())
@@ -271,7 +305,7 @@ fn gen(
                 if i == iterations {
                     image::Rgb([1, 1, 1])
                 } else {
-                    color_bands(i)
+                    colour_bands(&parameters.colours, i)
                 }
             })
         }
@@ -279,6 +313,10 @@ fn gen(
     img
 }
 
+/// yes, here we spawn threads that spawn more threads, this is the
+/// function you should use to generate an image section
+/// make sure to give it a sender (tx), it will return a sender itself
+/// that you can use to kill all child threads it spawns
 pub fn create_new_thread(
     tx: mpsc::Sender<ImgSec>, c: u32, parameters: Parameters,
 ) -> mpsc::Sender<()> {
@@ -294,23 +332,11 @@ pub fn create_new_thread(
     please_stop
 }
 
+/// spawns n threads of the mandelbrot set given Parameters and sends the data on tx
 fn spawn(
     tx: mpsc::Sender<ImgSec>, recv_cancel: mpsc::Receiver<()>, n: u32, parameters: &Parameters,
 ) -> Vec<std::thread::JoinHandle<()>> {
-    // loop {
-    //     thread::sleep(Duration::from_millis(500));
-    //     match recv_cancel.try_recv() {
-    //         Ok(_) => {
-    //             println!("message received. stopping.");
-    //             return
-    //         }
-    //         Err(TryRecvError::Disconnected) => {
-    //             println!("disconnected.");
-    //             return
-    //         }
-    //         Err(TryRecvError::Empty) => {}
-    //     }
-    // }
+    // this whole mess is to split the image up into sections to put into threads
     let imgx = parameters.size.x;
     let imgy = parameters.size.y;
     let mut xm: u32 = 0;
@@ -322,26 +348,21 @@ fn spawn(
         if n == 1 {
             break
         }
-        //println!("{i}/{n}");
-        //println!("{n}%{i} = {}", n % i);
-        if n % i == 0 {
-            //println!("{ym}x{xm}, {}", ((n / i) as i32) - 4);
-            if ((n / i) as i32) - 4 < min {
-                xm = i;
-                ym = n / i;
-                min = ((n / i) as i32) - 4;
-            }
-            //println!("{}, {}", xm, ym);
+        if n % i == 0 && ((n / i) as i32) - 4 < min {
+            xm = i;
+            ym = n / i;
+            min = ((n / i) as i32) - 4;
         }
         sx = imgx / xm;
         sy = imgy / ym;
     }
+    // end the messy section, xm is the number of threads to divide by on x axis, ym is y axis
+
+    // this section we spawn the threads for each section of the final image
     let mut threads = vec![];
     let mut killall = vec![];
     for x in 0..xm {
         for y in 0..ym {
-            //println!("{}, {}, {}, {}", x * sx, x * sx + sx, y * sy, y * sy + sy);
-            //gen(x * imgx / xm, imgx / xm, 0, imgy / 2);
             {
                 let s = tx.clone();
                 let p = parameters.clone();
@@ -357,6 +378,8 @@ fn spawn(
             }
         }
     }
+
+    // wait until killswitch is recieved
     match recv_cancel.recv() {
         Ok(_) => {
             for s in killall {
@@ -366,73 +389,8 @@ fn spawn(
         Err(e) => eprintln!("no message recieved: {e}"),
     }
     threads
-    //use image::io::Reader as ImageReader;
-
-    // for img in rx {
-    //     //println!("recieved! {recv:?}");
-
-    //     for (x, y, p) in img.enumerate_pixels() {
-    //         let pixel = (*imgbuf).get_pixel_mut(x, y);
-    //         let image::Rgb(data) = *p;
-    //         if data[0] > 0 || data[1] > 0 || data[2] > 0 {
-    //             //*pixel = image::Rgb([255, 0, 255]);
-    //             *pixel = *p;
-    //         }
-    //     }
-    //     //imgbuf.save("fractal.png").unwrap();
-
-    //     count -= 1;
-    //     if count <= 0 {
-    //         return
-    //     }
-    // }
-
-    //let mut image = image::ImageBuffer::new(imgx, imgy);
-    //for (x, y, p) in imgbuf.enumerate_pixels_mut() {
-    //    let pixel = image.get_pixel_mut(x, y);
-    //    let image::Rgb(data) = *p;
-    //    if data[0] > 0 || data[1] > 0 || data[2] > 0 {
-    //        *pixel = *p;
-    //    }
-    //    *pixel = image::Rgb([0, 0, 0]);
-    //}
-    //imgbuf.save("fractal.png").unwrap();
-
-    // for (_, _, p) in imgbuf.enumerate_pixels_mut() {
-    //     *p = image::Rgb([255, 255, 255]);
-    // }
-    // for i in 0..imgx {
-    //     for j in 0..i {
-    //         let pixel = imgbuf.get_pixel_mut(j, i);
-    //         *pixel = image::Rgb([0, 0, 255]);
-    //     }
-    // }
-    // imgbuf.save("fractal.png").unwrap();
-    // use std::time;
-    // thread::sleep(time::Duration::from_millis(4000));
-
-    // for thread in threads {
-    //     thread.join().unwrap();
-    //     println!("thread received");
-    //     let mut img = rx.recv().unwrap();
-    //     for (x, y, p) in img.enumerate_pixels_mut() {
-    //         let pixel = imgbuf.get_pixel_mut(x, y);
-    //         let image::Rgb(data) = *p;
-    //         if data[0] > 0 || data[1] > 0 || data[2] > 0 {
-    //             *pixel = *p;
-    //         }
-    //         *pixel = image::Rgb([0, 0, 0]);
-    //     }
-    //     imgbuf.save("fractal.png").unwrap();
-    //     //imgbuf.save("fractal.png").unwrap();
-    //     for i in 0..imgx {
-    //         for j in 0..i {
-    //             let pixel = imgbuf.get_pixel_mut(j, i);
-    //             *pixel = image::Rgb([255, 255, 0]);
-    //         }
-    //     }
-    // }
 }
+
 /*
    fn julia(a: f64, b: f64, ca: f64, cb: f64, i: i32, max: i32) -> i32 {
 //println!("a:{}, b:{}, i:{}, max:{}", a, b, i, max);
@@ -451,16 +409,25 @@ julia(a2 - b2 + ca, 2.0 * a * b + cb, ca, cb, i + 1, max)
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// prints output of the colour bands
     #[test]
-    fn colors() {
+    fn colours() {
+        let scheme = vec![
+            [2, 2, 11],
+            [255, 4, 211],
+            [0, 166, 166],
+            [230, 170, 104],
+            [140, 39, 30],
+            [187, 222, 240],
+        ];
         for i in 0..2000 {
             println!(
                 "{i}: {}, {} || {:?}",
                 (i % 256),
                 (i / 256) % 5,
-                color_bands(i)
+                colour_bands(&scheme, i)
             );
         }
-        assert_eq!(2 + 2, 5);
+        //assert_eq!(2 + 2, 5);
     }
 }

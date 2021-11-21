@@ -12,24 +12,21 @@ use image::{ImageBuffer,
             Rgb,
             RgbImage};
 
+/// given an iterator of ImgSec, add each ImgSec to the reference imgbuf
 fn receive_imgbuf<I>(receiver: I, imgbuf: &mut ImageBuffer<Rgb<u8>, Vec<u8>>)
 where
     I: IntoIterator<Item = ImgSec>, {
-    //let mut reciever = rx.try_iter();
     for img in receiver {
+        // iterate through all the pixels in the buffer of the image section
         for (x, y, p) in img.buf.enumerate_pixels() {
-            let image::Rgb(data) = *p;
-            if data[0] > 0 || data[1] > 0 || data[2] > 0 {
-                imgbuf.put_pixel(x + img.x, y + img.y, *p);
-            }
+            // add the processed pixels to imgbuf with a position offset
+            imgbuf.put_pixel(x + img.x, y + img.y, *p);
         }
     }
 }
 
 pub fn main() {
-    let sdl_context = sdl2::init().unwrap();
-    let video_subsystem = sdl_context.video().unwrap();
-    let mut opt = Parameters::from_opt();
+    let mut opt = Parameters::from_options();
 
     match &opt.command {
         Some(Command::Screenshot { .. }) => {
@@ -75,6 +72,9 @@ pub fn main() {
         None => (),
     }
 
+    let sdl_context = sdl2::init().unwrap();
+    let video_subsystem = sdl_context.video().unwrap();
+
     let window = video_subsystem
         .window("daedal", opt.size.x, opt.size.y)
         .position_centered()
@@ -94,6 +94,7 @@ pub fn main() {
     'running: loop {
         let time = SystemTime::now();
 
+        // update the canvas to imgbuf (display imgbuf)
         canvas.clear();
         for (x, y, p) in imgbuf.enumerate_pixels() {
             let image::Rgb(data) = *p;
@@ -104,17 +105,14 @@ pub fn main() {
             }
         }
 
+        // then get receive any pending threads
         receive_imgbuf(rx.try_iter(), &mut imgbuf);
 
         for event in event_pump.poll_iter() {
             match event {
                 Event::Quit { .. }
                 | Event::KeyDown {
-                    keycode: Some(Keycode::Escape),
-                    ..
-                }
-                | Event::KeyDown {
-                    keycode: Some(Keycode::Q),
+                    keycode: Some(Keycode::Escape) | Some(Keycode::Q),
                     ..
                 } => break 'running,
                 Event::Window {
@@ -122,6 +120,7 @@ pub fn main() {
                     ..
                 } => {
                     let _ = please_stop.send(());
+                    // yes this needs to be here right now
                     thread::sleep(Duration::from_millis(1000));
 
                     let size = canvas.output_size().unwrap();
@@ -269,7 +268,7 @@ mod tests {
     use super::*;
     #[test]
     fn dynamic_resolution() {
-        let mut opt = Parameters::from_opt();
+        let mut opt = Parameters::from_options();
         let (tx, rx) = mpsc::channel();
 
         opt.size.x = 800;
