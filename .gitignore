@@ -2,3 +2,5 @@
 shell.nix
 .envrc
 nix/**
+*.jpg
+*.png

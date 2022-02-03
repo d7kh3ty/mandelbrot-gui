@@ -1,21 +1,19 @@
-use std::{sync::mpsc,
-          thread,
-          time::Duration};
+use std::{sync::mpsc, thread, time::Duration};
 
 use daedal::mandelbrot::*;
-use sdl2::{event::{Event,
-                   WindowEvent},
-           gfx::primitives::DrawRenderer,
-           keyboard::Keycode,
-           pixels::Color};
-use image::{ImageBuffer,
-            Rgb,
-            RgbImage};
+use image::{ImageBuffer, Rgb, RgbImage};
+use sdl2::{
+    event::{Event, WindowEvent},
+    gfx::primitives::DrawRenderer,
+    keyboard::Keycode,
+    pixels::Color,
+};
 
 /// given an iterator of ImgSec, add each ImgSec to the reference imgbuf
 fn receive_imgbuf<I>(receiver: I, imgbuf: &mut ImageBuffer<Rgb<u8>, Vec<u8>>)
 where
-    I: IntoIterator<Item = ImgSec>, {
+    I: IntoIterator<Item = ImgSec>,
+{
     for img in receiver {
         // iterate through all the pixels in the buffer of the image section
         for (x, y, p) in img.buf.enumerate_pixels() {
@@ -26,6 +24,10 @@ where
 }
 
 pub fn main() {
+    start();
+}
+
+fn start() {
     let mut opt = Parameters::from_options();
 
     match &opt.command {

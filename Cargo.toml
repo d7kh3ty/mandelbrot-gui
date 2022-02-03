@@ -14,6 +14,7 @@ image = "0.23.14"
 ansi_term = "0.12.1"
 structopt = "0.3.23"
 egui = "0.15.0"
+stdweb = "0.4.2"
 
 [dependencies.sdl2]
 version = "0.35.1"
@@ -22,3 +23,6 @@ features = ["gfx"]
 
 [toolchain]
 channel = "nightly"
+
+[build]
+target = "wasm32-unknown-emscripten"
