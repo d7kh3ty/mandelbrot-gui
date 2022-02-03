@@ -1,16 +1,16 @@
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ImageSize {
     pub x: u32,
     pub y: u32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Position {
     pub x: f64,
     pub y: f64,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Parameters {
     pub size: ImageSize,
     pub position: Position,

@@ -6,6 +6,7 @@ use std::{sync::mpsc, thread, time::Duration};
 
 use crate::State;
 use daedal::create_new_thread;
+use daedal::gen;
 use image::{ImageBuffer, Rgb};
 use sdl2::event::WindowEvent;
 use std::time::SystemTime;
@@ -24,18 +25,18 @@ where
     }
 }
 
-/// the main loop, sdl2 stuff and changes to the state object happen here
-pub fn event_loop(state: &mut State) {
-    let time = SystemTime::now();
+pub fn event_loop_singlethreaded(state: &mut State) {
+    panic!("dwahawd");
+    let opt = &mut state.parameters;
 
+    let mut events = state.sdl_context.event_pump().unwrap();
     // unpack state variables
     let canvas = &mut state.canvas;
-    let opt = &mut state.parameters;
-    let please_stop = &mut state.kill_switch;
     let mut imgbuf = &mut state.imgbuf;
-    let (tx, rx) = &mut state.send_recieve;
 
-    // update the canvas (display imgbuf)
+    let (tx, rx) = mpsc::channel();
+    let imgsec = gen(rx, 0, 0, opt.size.x, opt.size.y, opt.clone());
+
     use sdl2::gfx::primitives::DrawRenderer;
     canvas.clear();
     for (x, y, p) in imgbuf.enumerate_pixels() {
@@ -46,9 +47,34 @@ pub fn event_loop(state: &mut State) {
                 .unwrap();
         }
     }
+    for event in events.poll_iter() {}
+}
+
+/// the main loop, sdl2 stuff and changes to the state object happen here
+pub fn event_loop(state: &mut State) {
+    let time = SystemTime::now();
+
+    // unpack state variables
+    let canvas = &mut state.canvas;
+    let opt = &mut state.parameters;
 
     // then get receive any pending threads
-    receive_imgbuf(rx.try_iter(), &mut imgbuf);
+
+    let (tx, rx) = &mut state.send_recieve;
+    receive_imgbuf(rx.try_iter(), &mut state.imgbuf);
+
+    // update the canvas (display imgbuf)
+    use sdl2::gfx::primitives::DrawRenderer;
+    for (x, y, p) in state.imgbuf.enumerate_pixels() {
+        let image::Rgb(data) = *p;
+        if data[0] > 0 || data[1] > 0 || data[2] > 0 {
+            canvas
+                .pixel(x as i16, y as i16, Color::RGB(data[0], data[1], data[2]))
+                .unwrap();
+        }
+    }
+
+    let mut please_stop: Option<mpsc::Sender<()>> = None;
 
     let mut events = state.sdl_context.event_pump().unwrap();
     for event in events.poll_iter() {
@@ -62,108 +88,120 @@ pub fn event_loop(state: &mut State) {
                 win_event: WindowEvent::Resized(..),
                 ..
             } => {
-                let _ = please_stop.send(());
+                if let Some(ref ty) = please_stop {
+                    ty.send(()).unwrap()
+                };
                 // yes this needs to be here right now
                 thread::sleep(Duration::from_millis(1000));
 
                 let size = canvas.output_size().unwrap();
                 opt.size.x = size.0;
                 opt.size.y = size.1;
-                *imgbuf = image::RgbImage::new(opt.size.x, opt.size.y);
-
-                *please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone())
+                state.imgbuf = image::RgbImage::new(opt.size.x, opt.size.y);
             }
             Event::KeyDown {
                 keycode: Some(Keycode::Up),
                 ..
             } => {
-                let _ = please_stop.send(());
+                if let Some(ref ty) = please_stop {
+                    ty.send(()).unwrap()
+                };
                 let mut z = 0.1 / (10.0_f64).powf(opt.scale);
                 if z < 0.0 {
                     z = -z;
                 }
                 opt.position.y -= z;
-                *please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
             }
             Event::KeyDown {
                 keycode: Some(Keycode::Down),
                 ..
             } => {
-                let _ = please_stop.send(());
+                if let Some(ref ty) = please_stop {
+                    ty.send(()).unwrap()
+                };
                 let mut z = 0.1 / (10.0_f64).powf(opt.scale);
                 if z > 0.0 {
                     z = -z;
                 }
                 opt.position.y -= z;
-                *please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
             }
             Event::KeyDown {
                 keycode: Some(Keycode::Left),
                 ..
             } => {
-                let _ = please_stop.send(());
+                let _ = if let Some(ref ty) = please_stop {
+                    ty.send(()).unwrap()
+                };
                 let mut z = 0.1 / (10.0_f64).powf(opt.scale);
                 if z < 0.0 {
                     z = -z;
                 }
                 opt.position.x -= z;
-                *please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
             }
             Event::KeyDown {
                 keycode: Some(Keycode::Right),
                 ..
             } => {
-                let _ = please_stop.send(());
+                let _ = if let Some(ref ty) = please_stop {
+                    ty.send(()).unwrap()
+                };
                 let mut z = 0.1 / (10.0_f64).powf(opt.scale);
                 if z > 0.0 {
                     z = -z;
                 }
                 opt.position.x -= z;
-                *please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
             }
             Event::KeyDown {
                 keycode: Some(Keycode::Equals),
                 ..
             } => {
-                let _ = please_stop.send(());
+                let _ = if let Some(ref ty) = please_stop {
+                    ty.send(()).unwrap()
+                };
                 opt.scale += 0.1;
-                *please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
             }
             Event::KeyDown {
                 keycode: Some(Keycode::Minus),
                 ..
             } => {
-                let _ = please_stop.send(());
+                let _ = if let Some(ref ty) = please_stop {
+                    ty.send(()).unwrap()
+                };
                 opt.scale -= 0.1;
-                *please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
             }
             Event::KeyDown {
                 keycode: Some(Keycode::P),
                 ..
             } => {
-                let _ = please_stop.send(());
+                let _ = if let Some(ref ty) = please_stop {
+                    ty.send(()).unwrap()
+                };
                 opt.iterations += 1000;
-                *please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
             }
             Event::KeyDown {
                 keycode: Some(Keycode::N),
                 ..
             } => {
-                let _ = please_stop.send(());
+                let _ = if let Some(ref ty) = please_stop {
+                    ty.send(()).unwrap()
+                };
                 opt.iterations -= 1000;
-                *please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
             }
             Event::KeyDown {
                 keycode: Some(Keycode::C),
                 ..
             } => {
-                let _ = please_stop.send(());
+                let _ = if let Some(ref ty) = please_stop {
+                    ty.send(()).unwrap()
+                };
             }
             Event::KeyDown {
                 keycode: Some(Keycode::S),
                 ..
             } => {
-                let _ = please_stop.send(());
+                let _ = if let Some(ref ty) = please_stop {
+                    ty.send(()).unwrap()
+                };
                 let (tx2, rx2) = mpsc::channel();
                 opt.size.x *= 4;
                 opt.size.y *= 4;
@@ -171,12 +209,14 @@ pub fn event_loop(state: &mut State) {
 
                 eprintln!("spawning threads....");
                 let mut imgbuf = image::RgbImage::new(opt.size.x, opt.size.y);
-                let please_stop = create_new_thread(tx2, opt.threads, opt.clone());
+                let please_stop = Some(create_new_thread(tx2, opt.threads, opt.clone()));
 
                 receive_imgbuf(rx2.iter().take(opt.threads as usize), &mut imgbuf);
 
                 eprintln!("saving image....");
-                let _ = please_stop.send(());
+                let _ = if let Some(ref ty) = please_stop {
+                    ty.send(()).unwrap()
+                };
                 match imgbuf.save(format!(
                     "assets/{}-{}-{}.png",
                     opt.position.x, opt.position.y, opt.scale
@@ -190,8 +230,8 @@ pub fn event_loop(state: &mut State) {
             _ => {}
         }
     }
+    please_stop = Some(create_new_thread(tx.clone(), opt.threads, opt.clone()));
 
-    //println!("{:?}", size);
     canvas
         .string(
             10,

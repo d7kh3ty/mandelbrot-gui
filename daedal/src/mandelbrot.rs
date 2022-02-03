@@ -65,7 +65,7 @@ fn colour_bands(scheme: &[[u8; 3]], i: u32) -> image::Rgb<u8> {
     image::Rgb(x.try_into().unwrap())
 }
 
-fn gen(
+pub fn gen(
     recv_cancel: mpsc::Receiver<()>,
     x1: u32,
     x2: u32,
@@ -118,7 +118,7 @@ fn gen(
 
 /// yes, here we spawn threads that spawn more threads, this is the
 /// function you should use to generate an image section
-/// make sure to give it a sender (tx), it will return a sender itself
+/// make sure to give it a sender (tx), it will return its own sender
 /// that you can use to kill all child threads it spawns
 pub fn create_new_thread(
     tx: mpsc::Sender<ImgSec>,
@@ -138,7 +138,7 @@ pub fn create_new_thread(
 }
 
 /// spawns n threads of the mandelbrot set given Parameters and sends the data on tx
-fn spawn(
+pub fn spawn(
     tx: mpsc::Sender<ImgSec>,
     recv_cancel: mpsc::Receiver<()>,
     n: u32,

@@ -215,6 +215,7 @@ dependencies = [
  "anyhow",
  "daedal 0.1.0",
  "egui",
+ "emscripten_main_loop",
  "image",
  "sdl2",
  "stdweb",
@@ -259,6 +260,12 @@ name = "emath"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "24a1aaa922d55da6a2bf32957c3d153e7fb9d52ed8d69777a75092240172eb6e"
+
+[[package]]
+name = "emscripten_main_loop"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5afad28b2fe4187ba9be5ea0172be678a18d89972722987a5487cd385669b682"
 
 [[package]]
 name = "epaint"

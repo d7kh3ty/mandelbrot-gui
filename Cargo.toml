@@ -13,6 +13,7 @@ structopt = "0.3.23"
 egui = "0.15.0"
 stdweb = "0.4.2"
 anyhow = "1.0.53"
+emscripten_main_loop = "0.1.1"
 
 [dependencies.sdl2]
 version = "0.35.1"

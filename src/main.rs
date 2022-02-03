@@ -15,7 +15,6 @@ pub struct State {
     canvas: sdl2::render::Canvas<sdl2::video::Window>,
     imgbuf: image::RgbImage,
     parameters: Parameters,
-    kill_switch: mpsc::Sender<()>,
     send_recieve: (
         Sender<daedal::mandelbrot::ImgSec>,
         Receiver<daedal::mandelbrot::ImgSec>,
@@ -45,24 +44,28 @@ impl State {
 
         let send_recieve = mpsc::channel();
 
-        let kill_switch =
-            daedal::create_new_thread(send_recieve.0.clone(), options.threads, options.clone());
-
         Ok(Self {
             sdl_context,
             canvas,
             imgbuf,
             parameters: options,
-            kill_switch,
             send_recieve,
         })
+    }
+}
+
+/// run the event loop within emscripten
+impl emscripten_main_loop::MainLoop for State {
+    fn main_loop(&mut self) -> emscripten_main_loop::MainLoopEvent {
+        events::event_loop_singlethreaded(self);
+        emscripten_main_loop::MainLoopEvent::Continue
     }
 }
 
 pub fn main() {
     let mut state = State::new().unwrap();
 
-    let mut opt = &mut state.parameters;
+    let mut opt = state.parameters.clone();
 
     #[cfg(not(target_os = "emscripten"))]
     match &opt.command {
@@ -108,6 +111,13 @@ pub fn main() {
         }
         None => (),
     }
+
+    #[cfg(target_os = "emscripten")]
+    emscripten_main_loop::run(state);
+
+    let (tx, rx) = &mut state.send_recieve;
+    let _ = daedal::create_new_thread(tx.clone(), opt.threads, opt);
+    receive_imgbuf(rx.recv(), &mut state.imgbuf);
 
     #[cfg(not(target_os = "emscripten"))]
     loop {
