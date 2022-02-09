@@ -11,12 +11,8 @@ ansi_term = "0.12.1"
 structopt = "0.3.23"
 egui = "0.15.0"
 stdweb = "0.4.2"
+rayon = "1.5"
+wasm-bindgen = "0.2.74"
 
-[dependencies.sdl2]
-version = "0.35.1"
-default-features = false
-features = ["gfx"]
-
-[toolchain]
-channel = "nightly"
-
+[lib]
+crate-type = ["cdylib", "rlib"]

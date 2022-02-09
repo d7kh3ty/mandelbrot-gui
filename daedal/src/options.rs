@@ -1,16 +1,16 @@
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ImageSize {
     pub x: u32,
     pub y: u32,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Position {
     pub x: f64,
     pub y: f64,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Parameters {
     pub size: ImageSize,
     pub position: Position,
@@ -60,7 +60,7 @@ pub struct Opt {
     output: String,
 
     /// size of the image <width>x<height>
-    #[structopt(long, default_value = "800x640")]
+    #[structopt(long, default_value = "400x400")]
     size: String,
 
     /// define the center position of the image
@@ -72,7 +72,7 @@ pub struct Opt {
     scale: f64,
 
     /// the number of iterations to be ran
-    #[structopt(short, long, default_value = "1000")]
+    #[structopt(short, long, default_value = "255")]
     iterations: u32,
 
     /// colourscheme in the format:

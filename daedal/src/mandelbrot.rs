@@ -1,4 +1,11 @@
 extern crate image;
+use wasm_bindgen::{prelude::*, Clamped};
+
+#[cfg(feature = "parallel")]
+use rayon::prelude::*;
+
+#[cfg(feature = "parallel")]
+pub use wasm_bindgen_rayon::init_thread_pool;
 
 #[derive(Debug)]
 pub struct ImgSec {
@@ -7,7 +14,7 @@ pub struct ImgSec {
     pub buf: ImageBuffer<Rgb<u8>, Vec<u8>>,
 }
 
-use crate::options::*;
+use crate::options::Parameters;
 
 use image::{ImageBuffer, Rgb};
 
@@ -65,7 +72,76 @@ fn colour_bands(scheme: &[[u8; 3]], i: u32) -> image::Rgb<u8> {
     image::Rgb(x.try_into().unwrap())
 }
 
-fn gen(
+/*
+#[cfg(target_os = "emscripten")]
+#[wasm_bindgen]
+pub fn gen_emscripten() {
+    use rayon::iter::ParallelIterator;
+    let iterations = 0;
+    let imgx = 400;
+    let imgy = 400;
+    let posx = 400.0;
+    let posy = 400.0;
+    let scale = 1.0;
+    let colors = [0, 0, 0];
+    let output: Vec<u32> = vec![];
+    (0..imgx).into_par_iter().for_each(|x: i32| {
+        for y in 0..imgy {
+            //let dx: f64 = (x as f64 / imgx as f64) as f64;
+            //let dy: f64 = (y as f64 / imgy as f64) as f64;
+            let dx: f64 = (x as f64 - (imgx / 2) as f64) / (scale * imgx as f64) + posx;
+            let dy: f64 = (y as f64 - (imgy / 2) as f64)
+                / (scale * (imgx as f64 / imgy as f64) * imgy as f64)
+                + posy;
+
+            let i = mandel(dx, dy, iterations);
+            //let i = julia(-1.10863915use crate::Parameters;
+
+            //f = ((i % 100) * 255) as u8;
+
+            //let pixel = img.buf.get_pixel_mut(x - x1, y - y1);
+            //let image::Rgb(data) = *pixel;
+            //img.buf.put_pixel(x - x1, y - y1, {});
+        }
+    });
+}
+*/
+
+pub fn gen_simd(kill_switch: mpsc::Receiver<()>, opt: Parameters) -> ImageBuffer<Rgb<u8>, Vec<u8>> {
+    dbg!(&opt);
+    let sizex = opt.size.x;
+    let sizey = opt.size.x;
+    let positionx = opt.position.x;
+    let positiony = opt.position.y;
+    let scale = opt.scale;
+    let iterations = opt.iterations;
+
+    let mut imgbuf = ImageBuffer::new(opt.size.x, opt.size.y);
+    for x in 0..opt.size.x {
+        for y in 0..opt.size.y {
+            let dx: f64 = (x as f64 - (sizex / 2) as f64) / (scale * sizex as f64) + positionx;
+            let dy: f64 = (y as f64 - (sizey / 2) as f64)
+                / (scale * (sizex as f64 / sizey as f64) * sizey as f64)
+                + positiony;
+
+            let i = mandel(dx, dy, iterations);
+
+            imgbuf.put_pixel(
+                x,
+                y,
+                if i == iterations {
+                    image::Rgb([1 as u8, 1 as u8, 1 as u8])
+                } else {
+                    colour_bands(&opt.colours, i)
+                },
+            );
+        }
+    }
+    imgbuf
+}
+
+/// generate the fractal
+pub fn gen(
     recv_cancel: mpsc::Receiver<()>,
     x1: u32,
     x2: u32,
@@ -79,15 +155,15 @@ fn gen(
     let posy = parameters.position.y;
     let scale = (10.0_f64).powf(parameters.scale);
     let iterations = parameters.iterations;
-    // generate the fractal
 
     let mut img = ImgSec::new(x1, x2, y1, y2);
 
-    for x in x1..x2 {
+    let (tx, rx) = mpsc::channel();
+
+    use rayon::iter::IntoParallelIterator;
+    use rayon::iter::ParallelIterator;
+    (x1..x2).into_par_iter().for_each_with(tx, |tx, x| {
         for y in y1..y2 {
-            if recv_cancel.try_recv().is_ok() {
-                return img;
-            }
             //let dx: f64 = (x as f64 / imgx as f64) as f64;
             //let dy: f64 = (y as f64 / imgy as f64) as f64;
             let dx: f64 = (x as f64 - (imgx / 2) as f64) / (scale * imgx as f64) + posx;
@@ -104,31 +180,38 @@ fn gen(
 
             //let pixel = img.buf.get_pixel_mut(x - x1, y - y1);
             //let image::Rgb(data) = *pixel;
-            img.buf.put_pixel(x - x1, y - y1, {
+            //img.buf.put_pixel(x - x1, y - y1, {});
+            tx.send((
+                x - x1,
+                y - y1,
                 if i == iterations {
-                    image::Rgb([1, 1, 1])
+                    image::Rgb([1 as u8, 1 as u8, 1 as u8])
                 } else {
                     colour_bands(&parameters.colours, i)
-                }
-            })
+                },
+            ))
+            .unwrap();
         }
+    });
+    for (x, y, p) in rx.iter() {
+        if recv_cancel.try_recv().is_ok() {
+            return img;
+        }
+        img.buf.put_pixel(x, y, p);
     }
+    //println!("{}ms", time.elapsed().unwrap().as_millis());
     img
 }
 
 /// yes, here we spawn threads that spawn more threads, this is the
 /// function you should use to generate an image section
-/// make sure to give it a sender (tx), it will return a sender itself
+/// make sure to give it a sender (tx), it will return its own sender
 /// that you can use to kill all child threads it spawns
-pub fn create_new_thread(
-    tx: mpsc::Sender<ImgSec>,
-    c: u32,
-    parameters: Parameters,
-) -> mpsc::Sender<()> {
+pub fn create_new_thread(tx: mpsc::Sender<ImgSec>, opt: Parameters) -> mpsc::Sender<()> {
     let (please_stop, recv_cancel) = mpsc::channel();
 
     thread::spawn(move || {
-        let threads = spawn(tx, recv_cancel, c, &parameters);
+        let threads = spawn(tx, recv_cancel, &opt);
         for thread in threads {
             thread.join().unwrap();
         }
@@ -138,12 +221,12 @@ pub fn create_new_thread(
 }
 
 /// spawns n threads of the mandelbrot set given Parameters and sends the data on tx
-fn spawn(
+pub fn spawn(
     tx: mpsc::Sender<ImgSec>,
     recv_cancel: mpsc::Receiver<()>,
-    n: u32,
     parameters: &Parameters,
 ) -> Vec<std::thread::JoinHandle<()>> {
+    let n = parameters.threads;
     // this whole mess is to split the image up into sections to put into threads
     let imgx = parameters.size.x;
     let imgy = parameters.size.y;

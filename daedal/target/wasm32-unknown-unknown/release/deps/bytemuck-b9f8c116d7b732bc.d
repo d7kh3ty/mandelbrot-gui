@@ -1,0 +1,12 @@
+/opt/projects/daedal/daedal/target/wasm32-unknown-unknown/release/deps/bytemuck-b9f8c116d7b732bc.rmeta: /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/lib.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/zeroable.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/pod.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/contiguous.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/offset_of.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/transparent.rs
+
+/opt/projects/daedal/daedal/target/wasm32-unknown-unknown/release/deps/libbytemuck-b9f8c116d7b732bc.rlib: /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/lib.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/zeroable.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/pod.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/contiguous.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/offset_of.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/transparent.rs
+
+/opt/projects/daedal/daedal/target/wasm32-unknown-unknown/release/deps/bytemuck-b9f8c116d7b732bc.d: /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/lib.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/zeroable.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/pod.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/contiguous.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/offset_of.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/transparent.rs
+
+/home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/lib.rs:
+/home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/zeroable.rs:
+/home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/pod.rs:
+/home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/contiguous.rs:
+/home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/offset_of.rs:
+/home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/bytemuck-1.7.3/src/transparent.rs:

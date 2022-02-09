@@ -1,7 +1,7 @@
 [package]
-name = "daedal"
-version = "0.6.0"
-edition = "2018"
+name = "daedal-gui"
+version = "0.1.0"
+edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,13 +13,11 @@ structopt = "0.3.23"
 egui = "0.15.0"
 stdweb = "0.4.2"
 anyhow = "1.0.53"
+wasm-bindgen = "0.2.74"
+rayon = "1.5"
+emscripten_main_loop = "0.1.1"
 
 [dependencies.sdl2]
 version = "0.35.1"
 default-features = false
 features = ["gfx"]
-
-[toolchain]
-channel = "nightly"
-
-

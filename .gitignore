@@ -1,6 +1,2 @@
 /target
-shell.nix
-.envrc
-nix/**
-*.jpg
-*.png
+/static/node_modules

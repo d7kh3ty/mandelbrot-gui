@@ -1,0 +1,13 @@
+/opt/projects/mandelbrot-gui/daedal/target/wasm32-unknown-unknown/debug/deps/gif-52e474b6e954650c.rmeta: /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/lib.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/traits.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/common.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/reader/mod.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/reader/decoder.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/encoder.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/../README.md
+
+/opt/projects/mandelbrot-gui/daedal/target/wasm32-unknown-unknown/debug/deps/libgif-52e474b6e954650c.rlib: /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/lib.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/traits.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/common.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/reader/mod.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/reader/decoder.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/encoder.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/../README.md
+
+/opt/projects/mandelbrot-gui/daedal/target/wasm32-unknown-unknown/debug/deps/gif-52e474b6e954650c.d: /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/lib.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/traits.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/common.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/reader/mod.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/reader/decoder.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/encoder.rs /home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/../README.md
+
+/home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/lib.rs:
+/home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/traits.rs:
+/home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/common.rs:
+/home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/reader/mod.rs:
+/home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/reader/decoder.rs:
+/home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/encoder.rs:
+/home/izzy/.cargo/registry/src/github.com-1ecc6299db9ec823/gif-0.11.3/src/../README.md:

@@ -1,13 +1,15 @@
-use crate::events::receive_imgbuf;
 use daedal::create_new_thread;
 use daedal::options::Command;
 use daedal::options::Parameters;
 use image::RgbImage;
+use sdl2::event::Event;
+use sdl2::keyboard::Keycode;
 use sdl2::pixels::Color;
-use std::sync::mpsc::Sender;
-use std::sync::mpsc::{self, Receiver};
+use std::process;
+use std::sync::mpsc::{self, Receiver, Sender};
+use std::time::SystemTime;
 
-mod events;
+pub mod events;
 
 /// all data required by the main loop
 pub struct State {
@@ -15,7 +17,6 @@ pub struct State {
     canvas: sdl2::render::Canvas<sdl2::video::Window>,
     imgbuf: image::RgbImage,
     parameters: Parameters,
-    kill_switch: mpsc::Sender<()>,
     send_recieve: (
         Sender<daedal::mandelbrot::ImgSec>,
         Receiver<daedal::mandelbrot::ImgSec>,
@@ -45,97 +46,116 @@ impl State {
 
         let send_recieve = mpsc::channel();
 
-        let kill_switch =
-            daedal::create_new_thread(send_recieve.0.clone(), options.threads, options.clone());
-
         Ok(Self {
             sdl_context,
             canvas,
             imgbuf,
             parameters: options,
-            kill_switch,
             send_recieve,
         })
     }
 }
 
-pub fn main() {
-    let mut state = State::new().unwrap();
-
-    let mut opt = &mut state.parameters;
-
-    #[cfg(not(target_os = "emscripten"))]
-    match &opt.command {
-        Some(Command::Screenshot { .. }) => {
-            println!("taking screenshot......");
-            let (tx, rx) = mpsc::channel();
-            let kill = create_new_thread(tx, opt.threads, opt.clone());
-
-            let mut imgbuf = RgbImage::new(opt.size.x, opt.size.y);
-            receive_imgbuf(rx.iter().take(opt.threads as usize), &mut imgbuf);
-            kill.send(()).unwrap();
-            match imgbuf.save(&opt.output) {
-                Ok(_) => return,
-                Err(e) => panic!("could not save image! {}", e),
-            }
+#[cfg(target_os = "emscripten")]
+/// run the event loop within emscripten
+impl emscripten_main_loop::MainLoop for State {
+    fn main_loop(&mut self) -> emscripten_main_loop::MainLoopEvent {
+        let mut events = self.sdl_context.event_pump().unwrap();
+        for event in events.poll_iter() {
+            println!("caught event: {event:?}");
+            //dbg!(sum(&[1, 2, 3, 4]));
+            events::event_loop_emscripten(event, self);
         }
-        Some(Command::Animation {
-            size: _,
-            folder,
-            start,
-            end,
-            inc,
-            position: _,
-        }) => {
-            opt.scale = *start;
-            opt.iterations = 4000;
-            let mut count = 0;
-            let total = (*end - *start) / *inc;
-            while opt.scale < *end {
-                count += 1;
-                opt.scale += *inc;
-                let (tx, rx) = mpsc::channel();
-                let kill = create_new_thread(tx.clone(), opt.threads, opt.clone());
-
-                let mut imgbuf = RgbImage::new(opt.size.x, opt.size.y);
-                receive_imgbuf(rx.iter().take(opt.threads as usize), &mut imgbuf);
-                kill.send(()).unwrap();
-                match imgbuf.save(format!("{folder}/{count}.png")) {
-                    Ok(_) => println!("image {count}/{total} saved!"),
-                    Err(e) => panic!("could not save image! {}", e),
-                }
-            }
-        }
-        None => (),
-    }
-
-    #[cfg(not(target_os = "emscripten"))]
-    loop {
-        events::event_loop(&mut state)
+        emscripten_main_loop::MainLoopEvent::Continue
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn dynamic_resolution() {
-        let mut opt = Parameters::from_options();
-        let (tx, rx) = mpsc::channel();
+fn main() {
+    let mut state = State::new().unwrap();
 
-        opt.size.x = 800;
-        opt.size.y = 640;
+    #[cfg(target_os = "emscripten")]
+    {
+        println!("hello");
+        use events::display_set;
+        display_set(&mut state);
 
-        let mut imgbuf = image::RgbImage::new(opt.size.x, opt.size.y);
-        let please_stop = create_new_thread(tx.clone(), opt.threads, opt.clone());
+        use std::process;
+        emscripten_main_loop::run(state);
+        process::exit(1);
+    }
+    let mut opt = state.parameters.clone();
 
-        thread::sleep(Duration::from_millis(500));
+    #[cfg(not(target_os = "emscripten"))]
+    {
+        match &opt.command {
+            Some(Command::Screenshot { .. }) => {
+                println!("taking screenshot......");
+                let (tx, rx) = mpsc::channel();
+                let kill = create_new_thread(tx, opt.clone());
 
-        receive_imgbuf(rx.try_iter(), &mut imgbuf);
-        eprintln!("saving image....");
+                let mut imgbuf = RgbImage::new(opt.size.x, opt.size.y);
+                events::receive_imgbuf(rx.iter().take(opt.threads as usize), &mut imgbuf);
+                kill.send(()).unwrap();
+                match imgbuf.save(&opt.output) {
+                    Ok(_) => return,
+                    Err(e) => panic!("could not save image! {}", e),
+                }
+            }
+            Some(Command::Animation {
+                size: _,
+                folder,
+                start,
+                end,
+                inc,
+                position: _,
+            }) => {
+                opt.scale = *start;
+                opt.iterations = 4000;
+                let mut count = 0;
+                let total = (*end - *start) / *inc;
+                while opt.scale < *end {
+                    count += 1;
+                    opt.scale += *inc;
+                    let (tx, rx) = mpsc::channel();
+                    let kill = create_new_thread(tx.clone(), opt.clone());
 
-        let _ = please_stop.send(());
-        imgbuf.save("test.png").unwrap();
-        assert_eq!(1, 0);
+                    let mut imgbuf = RgbImage::new(opt.size.x, opt.size.y);
+                    events::receive_imgbuf(rx.iter().take(opt.threads as usize), &mut imgbuf);
+                    kill.send(()).unwrap();
+                    match imgbuf.save(format!("{folder}/{count}.png")) {
+                        Ok(_) => println!("image {count}/{total} saved!"),
+                        Err(e) => panic!("could not save image! {}", e),
+                    }
+                }
+            }
+            None => (),
+        }
+
+        let (tx, rx) = &mut state.send_recieve;
+        let mut kill_switch = daedal::create_new_thread(tx.clone(), opt);
+        events::receive_imgbuf(rx.try_iter(), &mut state.imgbuf);
+
+        events::display_set(&mut state);
+
+        let mut events = state.sdl_context.event_pump().unwrap();
+        let mut time = SystemTime::now();
+        // the event loop
+        loop {
+            {
+                let (_, rx) = &mut state.send_recieve;
+                // receive any pending threads and display the results
+                if events::receive_imgbuf(rx.try_iter(), &mut state.imgbuf) != 0 {
+                    events::display_imgbuf(&mut state.canvas, &state.imgbuf, time);
+                }
+            }
+            for event in events.poll_iter() {
+                if events::event_query(&event, &mut state) {
+                    time = SystemTime::now();
+                    kill_switch.send(()).unwrap();
+                    let (tx, rx) = &mut state.send_recieve;
+                    kill_switch = create_new_thread(tx.clone(), state.parameters.clone());
+                }
+            }
+        }
     }
 }

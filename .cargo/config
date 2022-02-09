@@ -1,6 +1,9 @@
 [target.wasm32-unknown-emscripten]
 rustflags = [
-    "-C", "link-arg=-sUSE_SDL=2",
-    "-C", "link-arg=-sUSE_SDL_GFX=2",
-    "-C", "link-args=gxx_personality_v0_stub.o"
+    "-C", "link-arg=-sUSE_SDL_GFX=2 -sUSE_SDL=2 -s ERROR_ON_UNDEFINED_SYMBOLS=0",
+]
+
+[target.asmjs-unknown-emscripten]
+rustflags = [
+    "-C", "link-arg=-s USE_SDL=2 -s ERROR_ON_UNDEFINED_SYMBOLS=0",
 ]

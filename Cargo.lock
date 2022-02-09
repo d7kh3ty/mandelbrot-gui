@@ -174,9 +174,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-epoch"
-version = "0.9.6"
+version = "0.9.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "97242a70df9b89a65d0b6df3c4bf5b9ce03c5b7309019777fbde37e7537f8762"
+checksum = "c00d6d2ea26e8b151d99093005cb442fb9a37aeaca582a03ec70946f49ab5ed9"
 dependencies = [
  "cfg-if",
  "crossbeam-utils",
@@ -187,9 +187,9 @@ dependencies = [
 
 [[package]]
 name = "crossbeam-utils"
-version = "0.8.6"
+version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cfcae03edb34f947e64acdb1c33ec169824e20657e9ecb61cef6c8c74dcb8120"
+checksum = "b5e5bed1f1c269533fa816a0a5492b3545209a205ca1a54842be180eb63a16a6"
 dependencies = [
  "cfg-if",
  "lazy_static",
@@ -202,23 +202,27 @@ dependencies = [
  "ansi_term",
  "egui",
  "image",
- "sdl2",
+ "rayon",
  "stdweb",
  "structopt",
+ "wasm-bindgen",
 ]
 
 [[package]]
-name = "daedal"
-version = "0.6.0"
+name = "daedal-gui"
+version = "0.1.0"
 dependencies = [
  "ansi_term",
  "anyhow",
- "daedal 0.1.0",
+ "daedal",
  "egui",
+ "emscripten_main_loop",
  "image",
+ "rayon",
  "sdl2",
  "stdweb",
  "structopt",
+ "wasm-bindgen",
 ]
 
 [[package]]
@@ -259,6 +263,12 @@ name = "emath"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "24a1aaa922d55da6a2bf32957c3d153e7fb9d52ed8d69777a75092240172eb6e"
+
+[[package]]
+name = "emscripten_main_loop"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5afad28b2fe4187ba9be5ea0172be678a18d89972722987a5487cd385669b682"
 
 [[package]]
 name = "epaint"
